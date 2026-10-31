@@ -10,12 +10,13 @@ Everything that happens is written to the one SQLite world as it happens, so clo
 and reopening resumes exactly here.
 """
 
+import random
 import threading
 import time
 
 from ..vm import type_check
 from ..novelty import check_sequence
-from . import spark, combine, discover as disc, taste as taste_mod, verify
+from . import spark, combine, contact, discover as disc, taste as taste_mod, verify
 from .civilization import Civilization, create_civilization
 from .experiment import materialize, record, SEQ_LEN
 from .invention import Invention, behavior_hash
@@ -32,6 +33,10 @@ N_MUTATE = 2
 N_COMBINE = 3
 OEIS_BUDGET = 3          # max live OEIS lookups per tick (cached ones are free)
 
+# first contact
+CONTACT_INTERVAL = 22    # ticks between contact attempts
+CIV_NAMES = ["Aurorae", "Basilisk", "Cinder", "Delphi", "Ember", "Fathom", "Gyre"]
+
 
 class Engine:
     def __init__(self, store, n_civs=1):
@@ -44,22 +49,21 @@ class Engine:
 
     # -- world setup / resume ------------------------------------------------
     def _load_or_create(self):
-        rows = self.store.get_civs()
-        if not rows:
-            import random
-            rng = random.Random(0xC0FFEE)
-            names = ["Aurorae", "Basilisk", "Cinder", "Delphi", "Ember"]
-            for i in range(self.n_civs):
-                civ = create_civilization(self.store, names[i % len(names)], i, self.tick, rng)
-                self.civs.append(civ)
-                self.store.add_event(self.tick, civ.id, None, "genesis",
-                                     {"name": civ.name, "glyph": civ.glyph})
-        else:
-            for r in rows:
-                civ = Civilization(r)
-                for inv_row in self.store.load_inventions(civ.id):
-                    civ.register(Invention.from_row(inv_row))
-                self.civs.append(civ)
+        for r in self.store.get_civs():
+            civ = Civilization(r)
+            for inv_row in self.store.load_inventions(civ.id):
+                civ.register(Invention.from_row(inv_row))
+            self.civs.append(civ)
+        # ensure the world has at least n_civs; spawn any that are missing. New
+        # civilizations join the existing world rather than replacing it.
+        rng = random.Random(0xC0FFEE + len(self.civs))
+        while len(self.civs) < self.n_civs:
+            idx = len(self.civs)
+            civ = create_civilization(self.store, CIV_NAMES[idx % len(CIV_NAMES)],
+                                      idx, self.tick, rng)
+            self.civs.append(civ)
+            self.store.add_event(self.tick, civ.id, None, "genesis",
+                                 {"name": civ.name, "glyph": civ.glyph})
 
     # -- the loop ------------------------------------------------------------
     def run_forever(self, sleep=0.05):
@@ -76,8 +80,37 @@ class Engine:
             if civ.era >= 0 and civ_alive(civ):
                 self._oeis_left = OEIS_BUDGET
                 self._step_civ(civ)
+        if len(self.civs) >= 2 and self.tick % CONTACT_INTERVAL == 0:
+            self._first_contact()
         self.store.set_meta("tick", self.tick)
         return self.tick
+
+    # -- first contact between two sealed civilizations ----------------------
+    def _first_contact(self):
+        rng = random.Random((self.tick * 2246822519) & 0xFFFFFFFF)
+        pair = [c for c in self.civs if c.alive_total()]
+        if len(pair) < 2:
+            return
+        a, b = rng.sample(pair, 2)
+        # A offers its most valuable, genuinely structured invention
+        offers = sorted(a.alive_total(), key=lambda i: i.wealth, reverse=True)
+        offer = next((i for i in offers if len(i.prefix) >= 6 and len(set(i.prefix)) >= 4), None)
+        if offer is None:
+            return
+        res = contact.translate(self.store, offer, a, b, self.tick, INIT_WEALTH)
+        self.store.add_event(self.tick, b.id, None, "first_contact", {
+            "from_civ": a.id, "from_glyph": a.glyph, "to_civ": b.id, "to_glyph": b.glyph,
+            "offer": offer.symbol, "seq": offer.prefix[:8],
+            "translated": len(res["mapping"]), "new": len(res["created"]),
+            "convergent": len(res["convergent"]),
+        })
+        for (aid, bid, bh) in res["convergent"]:
+            src = a.registry.get(aid)
+            self.store.add_event(self.tick, b.id, bid, "convergent", {
+                "a_civ": a.id, "a_glyph": a.glyph, "b_civ": b.id, "b_glyph": b.glyph,
+                "seq": (src.prefix[:8] if src else []),
+                "note": "independently invented in both worlds",
+            })
 
     # -- one civilization ----------------------------------------------------
     def _step_civ(self, civ):
@@ -234,6 +267,17 @@ class Engine:
         if notable:
             self.store.add_event(self.tick, civ.id, inv_id, "discovery",
                                  {"symbol": symbol, "properties": [p[0] for p in notable]})
+
+        # convergent invention: did another sealed civilization already reach this exact
+        # behaviour on its own? If so, that is evidence the thing is fundamental.
+        if structured and distinct >= 6 and len(prefix) >= 8:
+            others = self.store.find_behavior_global(bh, exclude_civ=civ.id)
+            if others:
+                self.store.add_event(self.tick, civ.id, inv_id, "convergent", {
+                    "a_civ": others[0]["civ_id"], "b_civ": civ.id, "b_glyph": civ.glyph,
+                    "seq": prefix[:8], "also_in": len(others),
+                    "note": "independently invented in another world",
+                })
 
 
 def _ref_parts(body):

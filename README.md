@@ -116,20 +116,29 @@ civilization. Find a gold cell - that's a *first*. Click it and read its receipt
 
 ---
 
-## Where this is going
+## Parallel worlds and first contact
 
-What exists today is the **working miniature of the whole idea**: one civilization genuinely
-inventing, testing, verifying, combining, and persisting, with that real activity driving the
-organism. The architecture already has the seams for everything the full engine is meant to become:
+The engine runs several civilizations at once, each sealed off with its own seed, its own
+laws (operation costs), its own taste, and its own script. They invent in isolation and drift
+apart. Then two of them make **first contact**: one offers an invention, and the other cannot
+simply read it, because its parts are named in a foreign namespace and it runs under foreign
+laws. So the receiver builds a **translator**: it walks the whole dependency closure of the
+offered invention, re-creates each piece in its own world, remaps every internal reference, and
+re-runs it under its own laws to confirm it still behaves the same.
 
-- **parallel civilizations** that evolve incompatible formats, make *first contact*, and must
-  invent a translator to trade - with **convergent invention** across sealed worlds flagged as
-  evidence that a thing is fundamental;
-- **exaptation** (testing inventions on problems they were never built for),
+When a civilization turns out to have already invented the exact same thing (during contact or
+on its own), that is **convergent invention**: two sealed worlds reaching the same result
+independently. In testing, separate civilizations have independently arrived at the Fibonacci
+numbers, the perfect squares, and the cubes. When it happens it is logged as strong evidence the
+thing is fundamental, and the two worlds briefly connect on screen.
+
+## Where this is still going
+
+- **exaptation** (testing inventions on problems they were never built for) and
   **resurrection** of old failures when the laws change,
 - **evolving taste**, **shifting laws** and **mass extinctions** between eras,
-- and the **ouroboros**: the engine replacing its own parts with things it invented, and showing -
-  permanently, prominently - what percentage of therefore was written by therefore.
+- and the **ouroboros**: the engine replacing its own parts with things it invented, and showing,
+  permanently and prominently, what percentage of therefore was written by therefore.
 
 That number, climbing, is the whole story.
 

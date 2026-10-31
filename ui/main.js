@@ -13,7 +13,8 @@ const breadcrumb = document.getElementById('breadcrumb');
 const readout = document.getElementById('readout');
 const hud = document.getElementById('hud');
 
-const COL = { gold: '#ffcf6b', cyan: '#73e6ff', violet: '#b39cff', red: '#ff6b8b', dim: '#5b6480' };
+const COL = { gold: '#ffcf6b', cyan: '#73e6ff', violet: '#b39cff', red: '#ff6b8b',
+              green: '#7dffb0', dim: '#5b6480' };
 
 let DPR = Math.min(window.devicePixelRatio || 1, 2);
 function resize() {
@@ -32,6 +33,7 @@ const app = {
   recentBirths: [],
   lastEventId: 0,
   openInvId: null,
+  arcs: [],
 };
 
 // ---- data ------------------------------------------------------------------
@@ -87,6 +89,7 @@ function buildSurfaceCells() {
       data: c, seq: null, phase: Math.random() * 6.28,
     };
   });
+  app._civCellIndex = {}; app.cells.forEach(c => app._civCellIndex[c.id] = c);
 }
 
 function buildCivCells(d) {
@@ -107,7 +110,8 @@ function buildCivCells(d) {
     const p = pts[i];
     const r = 7 + Math.min(26, Math.log2((iv.wealth || 0) + 2) * 5) + Math.min(10, iv.uses * 1.2);
     let color = COL.violet;
-    if (iv.novelty === 'first') color = COL.gold;
+    if (iv.origin === 'immigrant') color = COL.green;      // arrived via first contact
+    else if (iv.novelty === 'first') color = COL.gold;
     else if (iv.novelty === 'known') color = COL.cyan;
     const dim = iv.status === 'dormant';
     return {
@@ -134,6 +138,29 @@ function draw(now) {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   ctx.clearRect(0, 0, innerWidth, innerHeight);
   const t = now / 1000;
+
+  // contact arcs: two civilizations touching, at the surface
+  if (app.level === 'surface' && app.arcs.length && app._civCellIndex) {
+    app.arcs = app.arcs.filter(a => now - a.born < 3200);
+    for (const arc of app.arcs) {
+      const A = app._civCellIndex[arc.a], B = app._civCellIndex[arc.b];
+      if (!A || !B) continue;
+      const age = (now - arc.born) / 3200;
+      const alpha = Math.sin(Math.min(1, age) * Math.PI) * 0.8;
+      const col = arc.convergent ? '255,207,107' : '125,255,176';
+      ctx.strokeStyle = `rgba(${col},${alpha})`;
+      ctx.lineWidth = arc.convergent ? 2.5 : 1.5;
+      ctx.beginPath();
+      const mx = (A.x + B.x) / 2, my = (A.y + B.y) / 2 - 90;
+      ctx.moveTo(A.x, A.y); ctx.quadraticCurveTo(mx, my, B.x, B.y); ctx.stroke();
+      // a travelling pulse along the arc
+      const tt = (age * 1.4) % 1;
+      const px = (1 - tt) * (1 - tt) * A.x + 2 * (1 - tt) * tt * mx + tt * tt * B.x;
+      const py = (1 - tt) * (1 - tt) * A.y + 2 * (1 - tt) * tt * my + tt * tt * B.y;
+      ctx.fillStyle = `rgba(${col},${alpha})`;
+      ctx.beginPath(); ctx.arc(px, py, 4, 0, 6.2832); ctx.fill();
+    }
+  }
 
   // filaments: lineage (an invention to its parts) at civ level
   if (app.level === 'civ') {
@@ -340,6 +367,8 @@ function describe(d) {
   }
   if (!clauses.length && noun === 'integer sequence')
     s = 'A sequence with no simple closed-form pattern detected' + (d.novelty && d.novelty.status === 'first' ? ', and not found in the OEIS.' : '.');
+  if (d.origin === 'immigrant')
+    s += ' It was carried in from another civilization during first contact and re-run here to confirm it behaves the same.';
   return s;
 }
 
@@ -418,6 +447,22 @@ function handleEvent(e) {
     flashLine(`× ${p.symbol || ''} went bankrupt`, COL.dim);
   } else if (e.type === 'genesis') {
     flashLine(`${p.glyph || ''} ${p.name} - a civilization begins`, COL.cyan);
+  } else if (e.type === 'first_contact') {
+    Organism.flash(0.8);
+    Sound.contact();
+    app.arcs.push({ a: p.from_civ, b: p.to_civ, born: performance.now(),
+                    convergent: (p.convergent || 0) > 0 });
+    const cv = p.convergent ? `, and found ${p.convergent} already shared` : '';
+    app.latest = `first contact: ${p.from_glyph} reached ${p.to_glyph}${cv}`;
+    flashLine(`first contact: ${p.from_glyph} meets ${p.to_glyph} - carried ${p.new} invention(s) across${cv}`, COL.green);
+    updateReadout();
+  } else if (e.type === 'convergent') {
+    Organism.flash(1.0);
+    Sound.convergent();
+    app.arcs.push({ a: p.a_civ, b: p.b_civ, born: performance.now(), convergent: true });
+    app.latest = `convergent invention: two worlds independently reached ${(p.seq || []).slice(0, 6).join(', ')}`;
+    flashLine(`convergent: two sealed worlds both invented ${(p.seq || []).slice(0, 7).join(', ')}`, COL.gold);
+    updateReadout();
   }
 }
 

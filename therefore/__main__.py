@@ -50,7 +50,7 @@ def dump(store):
 def main():
     ap = argparse.ArgumentParser(prog="therefore")
     ap.add_argument("--port", type=int, default=8000)
-    ap.add_argument("--civs", type=int, default=1)
+    ap.add_argument("--civs", type=int, default=3)
     ap.add_argument("--dump", action="store_true")
     ap.add_argument("--no-browser", action="store_true")
     ap.add_argument("--tick-sleep", type=float, default=0.05)

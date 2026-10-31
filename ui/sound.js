@@ -80,6 +80,19 @@
       if (!on) return;
       voice(BASE / 3, 2.2, 'sawtooth', 0.2);
     },
+    contact() {
+      // two worlds touch: a rising fourth, two voices reaching toward each other
+      if (!on) return;
+      const t = ctx.currentTime;
+      voice(BASE, 0.9, 'sine', 0.1, t);
+      voice(BASE * 4 / 3, 0.9, 'sine', 0.1, t + 0.12);
+    },
+    convergent() {
+      // both worlds reached the same thing on their own: a clean, ringing fifth
+      if (!on) return;
+      const t = ctx.currentTime;
+      [1, 1.5, 2, 3].forEach((m, i) => voice(BASE * m, 1.8, 'sine', 0.1 - i * 0.012, t + i * 0.03));
+    },
     activity(a) {
       if (!on || !droneGain) return;
       droneGain.gain.setTargetAtTime(0.03 + Math.min(0.1, a * 0.12), ctx.currentTime, 1.5);
