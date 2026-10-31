@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>∴ therefore</title>
+<style>
+  @font-face {
+    /* a striking, free, unusual face shipped by nobody - we draw the wordmark
+       ourselves in SVG below, and use the system's most characterful mono for data */
+    font-family: "tf-mono";
+    src: local("Cascadia Code"), local("JetBrains Mono"), local("Consolas"),
+         local("SFMono-Regular"), local("Menlo"), local("monospace");
+  }
+  :root{
+    --bg:#05060a; --ink:#e9eefb; --dim:#5b6480; --gold:#ffcf6b; --cyan:#73e6ff;
+    --violet:#b39cff; --red:#ff6b8b;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+    font-family:"tf-mono",ui-monospace,monospace;overflow:hidden;cursor:crosshair;
+    -webkit-font-smoothing:antialiased;}
+  canvas{position:fixed;inset:0;width:100vw;height:100vh;display:block}
+  #gl{z-index:0}
+  #scene{z-index:1}
+  #hud{position:fixed;z-index:3;inset:0;pointer-events:none}
+  .wordmark{position:fixed;top:18px;left:22px;z-index:4;pointer-events:none;
+    letter-spacing:.42em;font-size:13px;color:var(--ink);opacity:.9;
+    text-transform:lowercase;text-shadow:0 0 18px rgba(115,230,255,.25)}
+  .wordmark b{letter-spacing:.1em;font-size:17px}
+  #breadcrumb{position:fixed;top:16px;right:22px;z-index:4;pointer-events:auto;
+    font-size:12px;color:var(--dim);letter-spacing:.12em;text-align:right}
+  #breadcrumb span{cursor:pointer}#breadcrumb span:hover{color:var(--ink)}
+  #readout{position:fixed;left:22px;bottom:18px;z-index:4;pointer-events:none;
+    font-size:11px;color:var(--dim);letter-spacing:.14em;line-height:1.9}
+  #readout b{color:var(--ink);font-weight:500}
+  #hint{position:fixed;right:22px;bottom:18px;z-index:4;pointer-events:none;
+    font-size:11px;color:var(--dim);letter-spacing:.12em;opacity:.7}
+  #tip{position:fixed;z-index:6;pointer-events:none;background:rgba(10,12,20,.92);
+    border:1px solid rgba(115,230,255,.25);padding:6px 9px;border-radius:7px;
+    font-size:12px;color:var(--ink);transform:translate(-50%,-140%);display:none;
+    white-space:nowrap;box-shadow:0 8px 40px rgba(0,0,0,.6)}
+  /* inspection: an organic membrane panel, not a card */
+  #inspect{position:fixed;z-index:5;top:0;right:0;height:100vh;width:min(440px,92vw);
+    transform:translateX(102%);transition:transform .5s cubic-bezier(.2,.8,.2,1);
+    background:linear-gradient(180deg,rgba(9,11,18,.9),rgba(9,11,18,.97));
+    backdrop-filter:blur(10px);border-left:1px solid rgba(115,230,255,.18);
+    padding:68px 26px 26px;overflow-y:auto;pointer-events:auto}
+  #inspect.open{transform:translateX(0)}
+  #inspect h1{font-size:34px;margin:0 0 2px;letter-spacing:.04em;font-weight:500;
+    text-shadow:0 0 24px rgba(115,230,255,.3)}
+  #inspect .sub{color:var(--dim);font-size:11px;letter-spacing:.18em;
+    text-transform:uppercase;margin-bottom:18px}
+  #inspect .what{font-size:14px;color:var(--ink);line-height:1.55;margin:4px 0 14px;
+    padding:11px 13px;border-left:2px solid rgba(255,207,107,.5);background:rgba(255,207,107,.05)}
+  #inspect .seq{font-size:13px;color:var(--cyan);word-break:break-word;line-height:1.7}
+  #inspect .sec{margin:18px 0 6px;color:var(--dim);font-size:10px;letter-spacing:.24em;
+    text-transform:uppercase;border-bottom:1px solid rgba(91,100,128,.2);padding-bottom:5px}
+  #inspect .prop{display:inline-block;margin:3px 5px 3px 0;padding:3px 9px;font-size:11px;
+    border:1px solid rgba(179,156,255,.35);color:var(--violet);border-radius:20px}
+  #inspect .kv{font-size:12px;color:var(--ink);margin:4px 0}
+  #inspect .kv .k{color:var(--dim)}
+  #inspect .genome{font-size:11px;color:#9fb0d8;white-space:pre-wrap;line-height:1.5;
+    background:rgba(0,0,0,.3);padding:10px;border-radius:8px;border:1px solid rgba(91,100,128,.15)}
+  #inspect .first{color:var(--gold);border-color:rgba(255,207,107,.5)}
+  #inspect a{color:var(--cyan)}
+  #inspect .chip{cursor:pointer;display:inline-block;margin:3px 5px 3px 0;padding:3px 9px;
+    border:1px solid rgba(115,230,255,.3);border-radius:7px;font-size:12px;color:var(--cyan)}
+  #inspect .chip:hover{background:rgba(115,230,255,.1)}
+  #close{position:absolute;top:22px;right:24px;cursor:pointer;color:var(--dim);font-size:20px}
+  #close:hover{color:var(--ink)}
+  #sound{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:6;
+    pointer-events:auto;cursor:pointer;color:var(--dim);font-size:11px;letter-spacing:.18em;
+    border:1px solid rgba(91,100,128,.3);border-radius:20px;padding:5px 14px;background:rgba(10,12,20,.5)}
+  #sound:hover{color:var(--ink);border-color:rgba(115,230,255,.4)}
+  .flashline{animation:fade 2.2s forwards}
+  @keyframes fade{from{opacity:1}to{opacity:0}}
+</style>
+</head>
+<body>
+  <canvas id="gl"></canvas>
+  <canvas id="scene"></canvas>
+  <div id="hud"></div>
+
+  <div class="wordmark"><b>∴</b>&nbsp;&nbsp;t h e r e f o r e</div>
+  <div id="breadcrumb"></div>
+  <div id="readout"></div>
+  <div id="hint">dive in - click a cell · hover to translate · esc to surface</div>
+  <div id="tip"></div>
+
+  <aside id="inspect"><div id="close">×</div><div id="inspect-body"></div></aside>
+  <div id="sound">sound: off - click to wake</div>
+
+  <script src="organism.js"></script>
+  <script src="sound.js"></script>
+  <script src="main.js"></script>
+</body>
+</html>

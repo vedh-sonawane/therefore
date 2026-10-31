@@ -1,0 +1,9 @@
+# the world lives here — it is per-machine state, not source
+data/
+*.db
+*.db-wal
+*.db-shm
+
+__pycache__/
+*.pyc
+.DS_Store
