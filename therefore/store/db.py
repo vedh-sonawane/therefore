@@ -415,6 +415,7 @@ class Store:
         return {
             "tick": tick,
             "civs": civs,
+            "ouroboros": int(self.get_meta("ouroboros_pct", 0) or 0),
             "totals": {
                 "inventions": self.conn.execute(
                     "SELECT COUNT(*) n FROM inventions").fetchone()["n"],

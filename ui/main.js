@@ -21,9 +21,9 @@ async function refreshState() {
     ['tick', state.snap.tick],
     ['inventions', t.inventions],
     ['firsts', t.firsts],
-    ['experiments run', t.experiments],
     ['worlds', state.snap.civs.length],
-  ].map(([l, n]) => `<div class="stat"><div class="n">${Number(n).toLocaleString()}</div><div class="l">${l}</div></div>`).join('');
+    ['written by itself', (state.snap.ouroboros || 0) + '%'],
+  ].map(([l, n]) => `<div class="stat"><div class="n">${typeof n === 'number' ? Number(n).toLocaleString() : n}</div><div class="l">${l}</div></div>`).join('');
   $('#foot-right').innerHTML = `<b>${t.inventions.toLocaleString()}</b> inventions, all run and verified. nothing here is fabricated.`;
 }
 
@@ -50,6 +50,7 @@ const EVENTS = {
   taste:         { tag: 'TASTE',    cls: 'taste' },
   figure:        { tag: 'FIGURE',   cls: 'figure' },
   melody:        { tag: 'MELODY',   cls: 'melody' },
+  ouroboros:     { tag: 'OUROBOROS', cls: 'ouroboros' },
   genesis:       { tag: 'WORLD',    cls: 'world' },
   birth:         { tag: 'INVENT',   cls: 'invent' },
 };
@@ -92,6 +93,8 @@ function lineFor(e) {
       return { inv: e.inv_id, text: `a figure drawn from ${(p.from || []).join(' and ')}`, note: 'two sequences became a shape' };
     case 'melody':
       return { inv: e.inv_id, text: `a melody from ${(p.from || []).join(' and ')}`, note: 'two sequences became a tune' };
+    case 'ouroboros':
+      return { inv: e.inv_id, text: `the engine ${p.verb || 'adopts'} ${p.symbol} to run ${p.role}`, note: `${p.pct}% of its machinery is now self-written` };
     case 'genesis':
       return { text: `${p.glyph || ''} ${p.name} begins`, note: 'a new world' };
     default: return null;

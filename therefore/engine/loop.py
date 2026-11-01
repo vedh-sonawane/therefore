@@ -15,7 +15,7 @@ import random
 import threading
 import time
 
-from ..vm import type_check
+from ..vm import type_check, run
 from ..novelty import check_sequence
 from . import spark, combine, contact, discover as disc, domains, exapt, taste as taste_mod, verify
 from .civilization import Civilization, create_civilization
@@ -48,6 +48,17 @@ ENERGY_CHOICES = [0.18, 0.3, 0.5, 1.0, 1.0, 1.6, 2.2]  # scarce .. abundant comp
 CROSS_INTERVAL = 6       # every N ticks a world composes number inventions into figures/melodies
 N_CROSS = 4              # attempts per pass
 
+# the ouroboros: the engine's own swappable machinery, each organ fillable by an
+# invented function so the engine is partly run by things it invented.
+ORGANS = ["idea_bias", "combiner", "judge", "mutator"]
+ORGAN_ROLE = {
+    "idea_bias": "how many ideas it tries",
+    "combiner": "which inventions it combines",
+    "judge": "how it judges what is interesting",
+    "mutator": "how it mutates inventions",
+}
+ADOPT_INTERVAL = 55      # ticks between adopting an invented function into an organ
+
 
 class Engine:
     def __init__(self, store, n_civs=1):
@@ -57,6 +68,8 @@ class Engine:
         self.tick = int(store.get_meta("tick", 0) or 0)
         self._stop = threading.Event()
         self._load_or_create()
+        self.civ_by_id = {c.id: c for c in self.civs}
+        self.organs = json.loads(store.get_meta("organs", "{}") or "{}")
 
     # -- world setup / resume ------------------------------------------------
     def _load_or_create(self):
@@ -95,8 +108,52 @@ class Engine:
             self._first_contact()
         if self.tick % ERA_LENGTH == 0:
             self._era_transition()
+        if self.tick % ADOPT_INTERVAL == 0:
+            self._ouroboros_adopt()
         self.store.set_meta("tick", self.tick)
         return self.tick
+
+    # -- the ouroboros --------------------------------------------------------
+    def _organ_num(self, name, n, default):
+        """Value from the invented function installed in an organ, or the default."""
+        o = self.organs.get(name)
+        if not o or not o.get("inv"):
+            return default
+        cid, iid = o["inv"]
+        civ = self.civ_by_id.get(cid)
+        if not civ or iid not in civ.registry:
+            return default
+        r = run(civ.registry[iid], [int(n) % 97], civ.registry, laws=civ.laws, fuel=15000)
+        if r.ok and isinstance(r.value, int) and not isinstance(r.value, bool):
+            return r.value
+        return default
+
+    def _ouroboros_adopt(self):
+        best = None
+        for civ in self.civs:
+            for inv in civ.alive_total():
+                if len(set(inv.prefix)) >= 4 and (best is None or inv.wealth > best[2]):
+                    best = (civ.id, inv, inv.wealth, civ)
+        if not best:
+            return
+        cid, inv = best[0], best[1]
+        empty = [o for o in ORGANS if not self.organs.get(o, {}).get("inv")]
+        if empty:
+            name, verb = empty[0], "adopts"
+        else:
+            # every slot is already self-authored: keep renewing, replace one with a
+            # stronger invention so the machinery keeps turning over.
+            name = ORGANS[(self.tick // ADOPT_INTERVAL) % len(ORGANS)]
+            if self.organs.get(name, {}).get("inv") == [cid, inv.id]:
+                return
+            verb = "replaces"
+        self.organs[name] = {"inv": [cid, inv.id], "tick": self.tick}
+        self.store.set_meta("organs", json.dumps(self.organs))
+        pct = round(100 * sum(1 for o in ORGANS if self.organs.get(o, {}).get("inv")) / len(ORGANS))
+        self.store.set_meta("ouroboros_pct", pct)
+        self.store.add_event(self.tick, cid, inv.id, "ouroboros",
+                             {"organ": name, "role": ORGAN_ROLE[name], "verb": verb,
+                              "symbol": inv.symbol, "pct": pct})
 
     # -- eras: the laws of each world change, and the population is retested ----
     def _era_transition(self):
@@ -345,11 +402,15 @@ class Engine:
         cands = []
         callables = civ.callables()
         alive = civ.alive_total()
-        for _ in range(N_SPARK):
+        # organ: how many ideas it tries (an invented function may decide, within bounds)
+        n_spark = N_SPARK + (abs(self._organ_num("idea_bias", self.tick, 0)) % 4)
+        for _ in range(n_spark):
             body, origin = spark.spark_one(rng, callables)
             cands.append((body, origin, [], _ref_parts(body)))
         if alive:
-            for _ in range(N_MUTATE):
+            # organ: how much it mutates (an invented function may decide how many)
+            n_mut = N_MUTATE + (abs(self._organ_num("mutator", self.tick, 0)) % 3)
+            for _ in range(n_mut):
                 parent = rng.choice(alive)
                 body = spark.mutate(rng, parent.body, callables)
                 cands.append((body, "mutation", [parent.id], _ref_parts(body)))
@@ -359,9 +420,15 @@ class Engine:
             cands.append((body, "crossover", [a.id, b.id], _ref_parts(body)))
         # combinations: build bigger inventions from released parts
         if alive:
-            for _ in range(N_COMBINE):
+            for k in range(N_COMBINE):
                 if len(alive) >= 2 and rng.random() < 0.6:
-                    f, h = rng.sample(alive, 2)
+                    # organ: which inventions get combined (an invented function may steer)
+                    pick = self._organ_num("combiner", self.tick + k, None)
+                    if pick is not None:
+                        f = alive[abs(pick) % len(alive)]
+                        h = rng.choice(alive)
+                    else:
+                        f, h = rng.sample(alive, 2)
                     body, origin, parts = combine.combine_two(rng, f.id, h.id)
                 else:
                     f = rng.choice(alive)
@@ -413,6 +480,10 @@ class Engine:
         from ..vm import genome as g
         score = taste_mod.score(civ.taste, props, novelty["status"], total,
                                 distinct, len(prefix), g.size(body), g.uses_self(body))
+        # organ: how it judges what is interesting (an invented function nudges the score)
+        jb = self._organ_num("judge", distinct, None)
+        if jb is not None and score > -1.0:
+            score = round(score + (abs(jb) % 5) * 0.25, 3)
 
         released = total and repro and score >= RELEASE_THRESHOLD and structured
         status = "alive" if released else "dormant"
