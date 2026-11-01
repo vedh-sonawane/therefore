@@ -47,8 +47,17 @@ const EVENTS = {
   era:           { tag: 'ERA',      cls: 'era' },
   extinction:    { tag: 'EXTINCT',  cls: 'extinct' },
   resurrection:  { tag: 'REVIVE',   cls: 'revive' },
+  taste:         { tag: 'TASTE',    cls: 'taste' },
   genesis:       { tag: 'WORLD',    cls: 'world' },
   birth:         { tag: 'INVENT',   cls: 'invent' },
+};
+
+// plain-language names for the things a world can come to value
+const VIRTUE = {
+  structure: 'structured sequences', rarity: 'rare kinds like primes and squares',
+  growth: 'fast-growing sequences', novelty: 'never-before-seen sequences',
+  richness: 'varied sequences', parsimony: 'short, simple definitions',
+  recurrence: 'self-referential recurrences', totality: 'sequences that always compute',
 };
 
 function lineFor(e) {
@@ -73,6 +82,10 @@ function lineFor(e) {
       return { text: `mass extinction in ${p.glyph}: ${p.count} inventions fell dormant`, note: 'the survivors repopulate' };
     case 'resurrection':
       return { text: `${p.count} dormant inventions revived in ${p.glyph}`, note: 'old failures that work under the new laws' };
+    case 'taste':
+      return p.kind === 'revolution'
+        ? { text: `${p.glyph} undergoes a taste revolution`, note: `now prizes ${VIRTUE[p.to] || p.to}` }
+        : { text: `${p.glyph} changes what it values`, note: `from ${VIRTUE[p.from] || p.from} to ${VIRTUE[p.to] || p.to}` };
     case 'genesis':
       return { text: `${p.glyph || ''} ${p.name} begins`, note: 'a new world' };
     default: return null;
@@ -239,7 +252,7 @@ async function loadWorlds() {
     const row = el('div', 'row');
     row.innerHTML = `<span class="tk">${c.glyph}</span><span class="ty">${c.name.toUpperCase()}</span>` +
       `<span class="ct"><span class="seq">era ${c.era} &middot; ${c.alive} alive, ${c.dormant} dormant</span>` +
-      `<span class="note">${c.firsts} firsts, richest invention worth ${c.max_wealth}</span></span>`;
+      `<span class="note">${c.firsts} firsts${c.taste_top ? ' &middot; values ' + (VIRTUE[c.taste_top] || c.taste_top) : ''}</span></span>`;
     row.addEventListener('click', () => toggleWorld(row, c.id));
     host.appendChild(row);
   });
@@ -325,7 +338,9 @@ const STATIC = new URLSearchParams(location.search).has('static');
 (async () => {
   await refreshState();
   await seedLedger();
-  const open = new URLSearchParams(location.search).get('open');
+  const prm = new URLSearchParams(location.search);
+  if (prm.get('tab')) { const t = document.querySelector(`nav .tab[data-view="${prm.get('tab')}"]`); if (t) t.click(); }
+  const open = prm.get('open');
   if (open) openStandaloneDetail(+open);
   if (!STATIC) { setInterval(refreshState, 2000); connectStream(); }
 })();

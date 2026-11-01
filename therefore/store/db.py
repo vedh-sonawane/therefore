@@ -393,13 +393,21 @@ class Store:
             firsts = self.conn.execute(
                 "SELECT COUNT(*) n FROM novelty n JOIN inventions i ON i.id=n.inv_id "
                 "WHERE i.civ_id=? AND n.status='first'", (c["id"],)).fetchone()["n"]
+            taste_top = None
+            try:
+                import json as _json
+                tv = _json.loads(c["taste_json"] or "{}")
+                if tv:
+                    taste_top = max(tv, key=tv.get)
+            except Exception:
+                pass
             civs.append({
                 "id": c["id"], "name": c["name"], "glyph": c["glyph"],
                 "era": c["era"], "status": c["status"],
                 "alive": by.get("alive", 0), "dormant": by.get("dormant", 0),
                 "total": sum(by.values()),
                 "wealth": round(wealth["w"], 2), "max_wealth": round(wealth["mx"], 2),
-                "firsts": firsts,
+                "firsts": firsts, "taste_top": taste_top,
             })
         return {
             "tick": tick,

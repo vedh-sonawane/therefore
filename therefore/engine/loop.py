@@ -106,6 +106,11 @@ class Engine:
             self.store.add_event(self.tick, civ.id, None, "era",
                                  {"era": civ.era, "glyph": civ.glyph, "changed": changed,
                                   "energy": round(civ.laws.get("_energy", 1.0), 2)})
+            old_top, new_top, revo = self._drift_taste(civ, rng)
+            if revo or new_top != old_top:
+                self.store.add_event(self.tick, civ.id, None, "taste",
+                                     {"glyph": civ.glyph, "kind": "revolution" if revo else "shift",
+                                      "from": old_top, "to": new_top})
             revived, broke = self._retest(civ, rng)
             if revived:
                 self.store.add_event(self.tick, civ.id, None, "resurrection",
@@ -142,6 +147,23 @@ class Engine:
             desc.append("compute abundant")
         civ.laws = laws
         return desc
+
+    def _drift_taste(self, civ, rng):
+        """A world's sense of what is interesting is not fixed. Each era it drifts, and
+        now and then it has a revolution. Because taste gates what gets released, worlds
+        with different taste build genuinely different libraries."""
+        t = dict(civ.taste)
+        old_top = max(t, key=t.get)
+        revolution = rng.random() < 0.16
+        for k in t:
+            if revolution:
+                t[k] = round(max(0.1, rng.uniform(0.3, 2.2)), 3)
+            else:
+                t[k] = round(min(2.4, max(0.1, t[k] + rng.uniform(-0.35, 0.35))), 3)
+        civ.taste = t
+        new_top = max(t, key=t.get)
+        self.store.update_civ(civ.id, taste_json=json.dumps(t))
+        return old_top, new_top, revolution
 
     def _retest(self, civ, rng):
         """Re-run inventions under the new laws. Some alive ones no longer complete and
