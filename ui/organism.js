@@ -44,8 +44,8 @@
   }
   void main(){
     vec2 uv = (gl_FragCoord.xy - .5*uRes)/uRes.y;
-    float t = uTime*.06;
-    float turb = .35 + uActivity*.9;
+    float t = uTime*.05;
+    float turb = .22 + uActivity*.5;
 
     // domain warp -> organic tendrils
     vec2 q = vec2(fbm(uv*2.2 + t), fbm(uv*2.2 - t + 5.2));
@@ -53,8 +53,8 @@
                   fbm(uv*2.2 + 1.5*q + vec2(8.3,2.8) - t));
     float f = fbm(uv*2.0 + turb*r);
 
-    float rad = (0.62 + 0.14*uMass) * (1.0 - 0.25*uDepth);
-    float body = length(uv) - rad - (f-0.5)*(0.5+turb*0.5);
+    float rad = (0.52 + 0.13*uMass) * (1.0 - 0.22*uDepth);
+    float body = length(uv) - rad - (f-0.5)*(0.34+turb*0.32);
     float membrane = smoothstep(0.045, 0.0, abs(body));        // glowing shell
     float inner = smoothstep(0.0, -0.9, body);                  // inner plasma
     float core = exp(-6.0*length(uv)) ;
@@ -67,9 +67,9 @@
     col += vec3(0.02,0.03,0.06);                                // faint nebula
     col = mix(col, vec3(1.0,0.25,0.33), uExtinct*inner);         // extinction reddening
 
-    // vignette
-    col *= 1.0 - 0.4*dot(uv,uv);
-    col = pow(col, vec3(0.86));
+    // vignette - keep the form centred and the edges calm
+    col *= 1.0 - 0.58*dot(uv,uv);
+    col = pow(col, vec3(0.9));
     gl_FragColor = vec4(col, 1.0);
   }`;
 

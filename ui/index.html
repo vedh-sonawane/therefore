@@ -3,97 +3,175 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-<title>∴ therefore</title>
+<title>therefore</title>
 <style>
-  @font-face {
-    /* a striking, free, unusual face shipped by nobody - we draw the wordmark
-       ourselves in SVG below, and use the system's most characterful mono for data */
-    font-family: "tf-mono";
-    src: local("Cascadia Code"), local("JetBrains Mono"), local("Consolas"),
-         local("SFMono-Regular"), local("Menlo"), local("monospace");
-  }
   :root{
-    --bg:#05060a; --ink:#e9eefb; --dim:#5b6480; --gold:#ffcf6b; --cyan:#73e6ff;
-    --violet:#b39cff; --red:#ff6b8b;
+    --bg:#06070c; --bg2:#0b0e18;
+    --ink:#eef1fb; --ink2:#9aa3bf; --ink3:#5b6480;
+    --line:rgba(141,154,196,.14);
+    --gold:#ffce6a; --cyan:#74e6ff; --violet:#b69cff; --green:#78f0b0; --red:#ff6f8d;
+    --r:12px; --r2:9px;
+    --mono:ui-monospace,"Cascadia Code","JetBrains Mono","SFMono-Regular",Consolas,monospace;
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
-    font-family:"tf-mono",ui-monospace,monospace;overflow:hidden;cursor:crosshair;
-    -webkit-font-smoothing:antialiased;}
-  canvas{position:fixed;inset:0;width:100vw;height:100vh;display:block}
+    font-family:var(--mono);overflow:hidden;-webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility}
+  canvas{position:fixed;inset:0;display:block}
   #gl{z-index:0}
   #scene{z-index:1}
-  #hud{position:fixed;z-index:3;inset:0;pointer-events:none}
-  .wordmark{position:fixed;top:18px;left:22px;z-index:4;pointer-events:none;
-    letter-spacing:.42em;font-size:13px;color:var(--ink);opacity:.9;
-    text-transform:lowercase;text-shadow:0 0 18px rgba(115,230,255,.25)}
-  .wordmark b{letter-spacing:.1em;font-size:17px}
-  #breadcrumb{position:fixed;top:16px;right:22px;z-index:4;pointer-events:auto;
-    font-size:12px;color:var(--dim);letter-spacing:.12em;text-align:right}
-  #breadcrumb span{cursor:pointer}#breadcrumb span:hover{color:var(--ink)}
-  #readout{position:fixed;left:22px;bottom:18px;z-index:4;pointer-events:none;
-    font-size:11px;color:var(--dim);letter-spacing:.14em;line-height:1.9}
-  #readout b{color:var(--ink);font-weight:500}
-  #hint{position:fixed;right:22px;bottom:18px;z-index:4;pointer-events:none;
-    font-size:11px;color:var(--dim);letter-spacing:.12em;opacity:.7}
-  #tip{position:fixed;z-index:6;pointer-events:none;background:rgba(10,12,20,.92);
-    border:1px solid rgba(115,230,255,.25);padding:6px 9px;border-radius:7px;
-    font-size:12px;color:var(--ink);transform:translate(-50%,-140%);display:none;
-    white-space:nowrap;box-shadow:0 8px 40px rgba(0,0,0,.6)}
-  /* inspection: an organic membrane panel, not a card */
-  #inspect{position:fixed;z-index:5;top:0;right:0;height:100vh;width:min(440px,92vw);
-    transform:translateX(102%);transition:transform .5s cubic-bezier(.2,.8,.2,1);
-    background:linear-gradient(180deg,rgba(9,11,18,.9),rgba(9,11,18,.97));
-    backdrop-filter:blur(10px);border-left:1px solid rgba(115,230,255,.18);
-    padding:68px 26px 26px;overflow-y:auto;pointer-events:auto}
-  #inspect.open{transform:translateX(0)}
-  #inspect h1{font-size:34px;margin:0 0 2px;letter-spacing:.04em;font-weight:500;
-    text-shadow:0 0 24px rgba(115,230,255,.3)}
-  #inspect .sub{color:var(--dim);font-size:11px;letter-spacing:.18em;
-    text-transform:uppercase;margin-bottom:18px}
-  #inspect .what{font-size:14px;color:var(--ink);line-height:1.55;margin:4px 0 14px;
-    padding:11px 13px;border-left:2px solid rgba(255,207,107,.5);background:rgba(255,207,107,.05)}
-  #inspect .seq{font-size:13px;color:var(--cyan);word-break:break-word;line-height:1.7}
-  #inspect .sec{margin:18px 0 6px;color:var(--dim);font-size:10px;letter-spacing:.24em;
-    text-transform:uppercase;border-bottom:1px solid rgba(91,100,128,.2);padding-bottom:5px}
-  #inspect .prop{display:inline-block;margin:3px 5px 3px 0;padding:3px 9px;font-size:11px;
-    border:1px solid rgba(179,156,255,.35);color:var(--violet);border-radius:20px}
-  #inspect .kv{font-size:12px;color:var(--ink);margin:4px 0}
-  #inspect .kv .k{color:var(--dim)}
-  #inspect .genome{font-size:11px;color:#9fb0d8;white-space:pre-wrap;line-height:1.5;
-    background:rgba(0,0,0,.3);padding:10px;border-radius:8px;border:1px solid rgba(91,100,128,.15)}
-  #inspect .cacanvas{width:100%;aspect-ratio:1;image-rendering:pixelated;border-radius:8px;
-    border:1px solid rgba(179,156,255,.25);margin:4px 0 6px;display:block;background:#05060a}
-  #inspect .plot{width:100%;height:68px;display:block;margin:6px 0;border-radius:6px;
-    background:rgba(0,0,0,.25);border:1px solid rgba(91,100,128,.15)}
-  #inspect .first{color:var(--gold);border-color:rgba(255,207,107,.5)}
+  button{font-family:inherit}
+
+  /* ---------- top bar ---------- */
+  #topbar{position:fixed;z-index:6;top:0;left:0;right:0;height:58px;display:flex;
+    align-items:center;justify-content:space-between;padding:0 22px;pointer-events:none;
+    background:linear-gradient(180deg,rgba(6,7,12,.72),rgba(6,7,12,0))}
+  .brand{display:flex;align-items:baseline;gap:12px;pointer-events:auto}
+  .brand .mark{font-size:22px;color:var(--ink);text-shadow:0 0 22px rgba(116,230,255,.35)}
+  .brand .word{font-size:13px;letter-spacing:.46em;color:var(--ink2);text-transform:lowercase}
+  .crumbs{font-size:12px;letter-spacing:.08em;color:var(--ink3);margin-left:8px}
+  .crumbs b{color:var(--ink2);font-weight:500;cursor:pointer}
+  .crumbs b:hover{color:var(--ink)}
+  #status{display:flex;gap:16px;align-items:center;pointer-events:auto;
+    font-size:12px;color:var(--ink2);letter-spacing:.04em}
+  #status .stat b{color:var(--ink);font-weight:600}
+  #status .stat .lab{color:var(--ink3);font-size:10px;letter-spacing:.14em;text-transform:uppercase}
+  #status .gold b{color:var(--gold)}
+
+  /* ---------- discovery stream ---------- */
+  #stream{position:fixed;z-index:5;top:66px;right:16px;width:320px;max-height:calc(100vh - 150px);
+    display:flex;flex-direction:column;gap:9px;overflow:hidden;pointer-events:none;
+    transition:opacity .4s, transform .4s}
+  #stream.hidden{opacity:0;transform:translateX(30px);pointer-events:none}
+  .streamhead{display:flex;align-items:center;justify-content:space-between;
+    font-size:10px;letter-spacing:.26em;text-transform:uppercase;color:var(--ink3);
+    padding:0 4px 2px}
+  .streamhead .live{display:flex;align-items:center;gap:6px}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--green);
+    box-shadow:0 0 8px var(--green);animation:pulse 1.8s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  .card{pointer-events:auto;position:relative;display:flex;gap:11px;align-items:flex-start;
+    background:linear-gradient(180deg,rgba(14,17,28,.82),rgba(11,14,24,.82));
+    border:1px solid var(--line);border-radius:var(--r2);padding:10px 12px 10px 14px;
+    backdrop-filter:blur(9px);cursor:pointer;overflow:hidden;
+    animation:slidein .5s cubic-bezier(.2,.9,.2,1)}
+  .card:hover{border-color:rgba(141,154,196,.3)}
+  @keyframes slidein{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+  .card .bar{position:absolute;left:0;top:0;bottom:0;width:3px}
+  .card .body{flex:1;min-width:0}
+  .card .tag{font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;font-weight:700}
+  .card .tick{float:right;font-size:10px;color:var(--ink3);letter-spacing:.06em}
+  .card .main{font-size:12.5px;color:var(--ink);margin-top:3px;white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis}
+  .card .cap{font-size:10.5px;color:var(--ink2);margin-top:3px;white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis}
+  .card canvas{width:46px;height:46px;border-radius:6px;image-rendering:pixelated;
+    border:1px solid rgba(141,154,196,.2);flex-shrink:0;background:#070a14}
+  .t-first{color:var(--gold)} .b-first{background:var(--gold)}
+  .t-convergent{color:var(--gold)} .b-convergent{background:linear-gradient(var(--gold),var(--cyan))}
+  .t-exaptation{color:var(--violet)} .b-exaptation{background:var(--violet)}
+  .t-known{color:var(--cyan)} .b-known{background:var(--cyan)}
+  .t-contact{color:var(--green)} .b-contact{background:var(--green)}
+  .t-genesis{color:var(--cyan)} .b-genesis{background:var(--cyan)}
+
+  /* ---------- inspection ---------- */
+  #inspect{position:fixed;z-index:7;top:0;right:0;height:100vh;width:min(430px,94vw);
+    transform:translateX(103%);transition:transform .5s cubic-bezier(.2,.85,.2,1);
+    background:linear-gradient(180deg,rgba(9,11,19,.94),rgba(8,10,17,.98));
+    backdrop-filter:blur(16px);border-left:1px solid var(--line);
+    padding:64px 24px 28px;overflow-y:auto;pointer-events:auto}
+  #inspect.open{transform:none;box-shadow:-30px 0 80px rgba(0,0,0,.5)}
+  #inspect::-webkit-scrollbar{width:8px}
+  #inspect::-webkit-scrollbar-thumb{background:rgba(141,154,196,.2);border-radius:4px}
+  #inspect h1{font-size:40px;margin:0;line-height:1;letter-spacing:.02em;font-weight:500;
+    text-shadow:0 0 28px rgba(116,230,255,.3)}
+  #inspect .sub{color:var(--ink3);font-size:10.5px;letter-spacing:.16em;
+    text-transform:uppercase;margin:8px 0 16px}
+  #inspect .what{font-size:14px;color:var(--ink);line-height:1.6;margin:0 0 16px;
+    padding:12px 14px;border-radius:var(--r2);border:1px solid rgba(255,206,106,.28);
+    background:rgba(255,206,106,.06)}
+  #inspect .seq{font-size:13px;color:var(--cyan);word-break:break-word;line-height:1.7;
+    background:rgba(116,230,255,.05);padding:9px 12px;border-radius:var(--r2)}
+  #inspect .sec{margin:22px 0 9px;color:var(--ink3);font-size:10px;letter-spacing:.24em;
+    text-transform:uppercase}
+  #inspect .cacanvas{width:100%;aspect-ratio:1;image-rendering:pixelated;border-radius:var(--r2);
+    border:1px solid rgba(182,156,255,.25);display:block;background:#070a14}
+  #inspect .carow{display:flex;gap:14px;align-items:flex-start}
+  #inspect .cameta{flex:1}
+  #inspect .classbadge{display:inline-block;padding:4px 10px;border-radius:20px;font-size:11px;
+    border:1px solid rgba(182,156,255,.4);color:var(--violet);margin-bottom:8px}
+  #inspect .plot{width:100%;height:60px;display:block;margin:10px 0 8px;border-radius:var(--r2);
+    background:rgba(0,0,0,.25);border:1px solid var(--line)}
+  #inspect .prop{display:inline-block;margin:3px 5px 3px 0;padding:3px 10px;font-size:11px;
+    border:1px solid rgba(182,156,255,.32);color:var(--violet);border-radius:20px}
+  #inspect .kv{font-size:12px;color:var(--ink);margin:5px 0}
+  #inspect .kv .k{color:var(--ink3)}
   #inspect a{color:var(--cyan)}
-  #inspect .chip{cursor:pointer;display:inline-block;margin:3px 5px 3px 0;padding:3px 9px;
-    border:1px solid rgba(115,230,255,.3);border-radius:7px;font-size:12px;color:var(--cyan)}
-  #inspect .chip:hover{background:rgba(115,230,255,.1)}
-  #close{position:absolute;top:22px;right:24px;cursor:pointer;color:var(--dim);font-size:20px}
-  #close:hover{color:var(--ink)}
-  #sound{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:6;
-    pointer-events:auto;cursor:pointer;color:var(--dim);font-size:11px;letter-spacing:.18em;
-    border:1px solid rgba(91,100,128,.3);border-radius:20px;padding:5px 14px;background:rgba(10,12,20,.5)}
-  #sound:hover{color:var(--ink);border-color:rgba(115,230,255,.4)}
-  .flashline{animation:fade 2.2s forwards}
-  @keyframes fade{from{opacity:1}to{opacity:0}}
+  #inspect .genome{font-size:11px;color:#9fb0d8;white-space:pre-wrap;line-height:1.5;
+    background:rgba(0,0,0,.32);padding:11px;border-radius:var(--r2);border:1px solid var(--line)}
+  #inspect .chip{cursor:pointer;display:inline-block;margin:4px 6px 4px 0;padding:5px 11px;
+    border:1px solid rgba(116,230,255,.3);border-radius:var(--r2);font-size:12px;color:var(--cyan)}
+  #inspect .chip:hover{background:rgba(116,230,255,.1)}
+  #inspect .btn{cursor:pointer;display:inline-flex;align-items:center;gap:7px;margin-top:6px;
+    padding:8px 14px;border-radius:var(--r2);font-size:12px;color:var(--ink);
+    border:1px solid rgba(116,230,255,.35);background:rgba(116,230,255,.07)}
+  #inspect .btn:hover{background:rgba(116,230,255,.15)}
+  #close{position:absolute;top:20px;right:22px;cursor:pointer;color:var(--ink3);font-size:15px;
+    width:30px;height:30px;display:flex;align-items:center;justify-content:center;
+    border-radius:50%;border:1px solid var(--line)}
+  #close:hover{color:var(--ink);border-color:rgba(141,154,196,.4)}
+
+  /* ---------- bottom controls ---------- */
+  #dock{position:fixed;z-index:6;left:0;right:0;bottom:16px;display:flex;justify-content:center;
+    gap:10px;pointer-events:none}
+  .pill{pointer-events:auto;cursor:pointer;font-size:11px;letter-spacing:.14em;color:var(--ink2);
+    border:1px solid var(--line);border-radius:22px;padding:7px 15px;
+    background:rgba(11,14,24,.6);backdrop-filter:blur(8px);user-select:none}
+  .pill:hover{color:var(--ink);border-color:rgba(141,154,196,.35)}
+  .pill.on{color:var(--green);border-color:rgba(120,240,176,.4)}
+
+  /* ---------- onboarding + hint + tooltip ---------- */
+  #hint{position:fixed;z-index:6;left:22px;bottom:20px;font-size:11px;color:var(--ink3);
+    letter-spacing:.08em;max-width:340px;line-height:1.7;pointer-events:none}
+  #hint b{color:var(--ink2);font-weight:500}
+  #tip{position:fixed;z-index:9;pointer-events:none;background:rgba(10,12,20,.95);
+    border:1px solid rgba(116,230,255,.25);padding:7px 10px;border-radius:8px;font-size:12px;
+    color:var(--ink);transform:translate(-50%,-135%);display:none;white-space:nowrap;
+    box-shadow:0 10px 40px rgba(0,0,0,.6)}
+  .flash{position:fixed;z-index:8;left:50%;transform:translateX(-50%);
+    font-size:13px;letter-spacing:.1em;white-space:nowrap;pointer-events:none;
+    text-shadow:0 0 22px currentColor;animation:fl 2.6s forwards}
+  @keyframes fl{0%{opacity:0;transform:translate(-50%,8px)}12%{opacity:1;transform:translate(-50%,0)}
+    80%{opacity:1}100%{opacity:0}}
 </style>
 </head>
 <body>
   <canvas id="gl"></canvas>
   <canvas id="scene"></canvas>
-  <div id="hud"></div>
 
-  <div class="wordmark"><b>∴</b>&nbsp;&nbsp;t h e r e f o r e</div>
-  <div id="breadcrumb"></div>
-  <div id="readout"></div>
-  <div id="hint">dive in - click a cell · hover to translate · esc to surface</div>
+  <div id="topbar">
+    <div class="brand">
+      <span class="mark">&#8756;</span>
+      <span class="word">therefore</span>
+      <span class="crumbs" id="crumbs"></span>
+    </div>
+    <div id="status"></div>
+  </div>
+
+  <div id="stream">
+    <div class="streamhead"><span>discoveries</span>
+      <span class="live"><span class="dot"></span>live</span></div>
+    <div id="feed"></div>
+  </div>
+
+  <aside id="inspect"><div id="close">&#10005;</div><div id="inspect-body"></div></aside>
+
+  <div id="dock">
+    <div class="pill" id="sound">sound off</div>
+    <div class="pill" id="togglestream">hide stream</div>
+  </div>
+  <div id="hint"></div>
   <div id="tip"></div>
-
-  <aside id="inspect"><div id="close">×</div><div id="inspect-body"></div></aside>
-  <div id="sound">sound: off - click to wake</div>
 
   <script src="organism.js"></script>
   <script src="sound.js"></script>
