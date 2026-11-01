@@ -97,5 +97,19 @@
       if (!on || !droneGain) return;
       droneGain.gain.setTargetAtTime(0.03 + Math.min(0.1, a * 0.12), ctx.currentTime, 1.5);
     },
+    // play a sequence as a melody: each term becomes a note, so you hear its shape
+    play(seq) {
+      if (!ctx && !enable()) return;
+      resume();
+      const t0 = ctx.currentTime + 0.05, step = 0.145;
+      const n = Math.min(seq.length, 28);
+      for (let i = 0; i < n; i++) {
+        const deg = SCALE[((seq[i] % SCALE.length) + SCALE.length) % SCALE.length];
+        const mag = Math.abs(seq[i]) + 1;
+        const oct = Math.min(3, Math.floor(Math.log10(mag) / 1.1));
+        const f = BASE * Math.pow(2, (deg + 12 * oct) / 12);
+        voice(f, step * 1.7, 'triangle', 0.13, t0 + i * step);
+      }
+    },
   };
 })();

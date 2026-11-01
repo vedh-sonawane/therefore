@@ -56,7 +56,9 @@ CREATE TABLE IF NOT EXISTS inventions (
     prefix_json   TEXT,
     total         INTEGER DEFAULT 0,
     score         REAL DEFAULT 0,
-    novelty       TEXT DEFAULT 'pending'
+    novelty       TEXT DEFAULT 'pending',
+    exapted       INTEGER DEFAULT 0,
+    exapt_class   TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_inv_civ   ON inventions(civ_id);
 CREATE INDEX IF NOT EXISTS idx_inv_behav ON inventions(civ_id, behavior_hash);
@@ -141,6 +143,31 @@ class Store:
         self._lock = threading.Lock()
         if create:
             self.conn.executescript(SCHEMA)
+            self.conn.commit()
+        self._migrate()
+
+    def _migrate(self):
+        """Add columns that newer versions introduced, for worlds created earlier."""
+        existing = {r["name"] for r in self.conn.execute("PRAGMA table_info(inventions)")}
+        for col, ddl in (("exapted", "INTEGER DEFAULT 0"), ("exapt_class", "TEXT")):
+            if col not in existing:
+                try:
+                    self.conn.execute(f"ALTER TABLE inventions ADD COLUMN {col} {ddl}")
+                except Exception:
+                    pass
+        self.conn.commit()
+
+    # -- exaptation ----------------------------------------------------------
+    def get_unexapted(self, civ_id, limit=4):
+        return [dict(r) for r in self.conn.execute(
+            "SELECT * FROM inventions WHERE civ_id=? AND status='alive' AND total=1 "
+            "AND COALESCE(exapted,0)=0 ORDER BY wealth DESC LIMIT ?",
+            (civ_id, limit)).fetchall()]
+
+    def set_exapted(self, inv_id, cls):
+        with self._lock:
+            self.conn.execute(
+                "UPDATE inventions SET exapted=1, exapt_class=? WHERE id=?", (cls, inv_id))
             self.conn.commit()
 
     # -- meta ----------------------------------------------------------------

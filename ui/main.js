@@ -314,6 +314,11 @@ async function openInspect(id) {
     <div class="sub">${d.name} · ${d.origin} · ${d.total ? 'total' : 'partial'} · tick ${d.created_tick}</div>
     <div class="what">${describe(d)}</div>
     <div class="seq">${d.prefix.slice(0, 18).join(',  ')}${d.prefix.length > 18 ? ' ...' : ''}</div>
+    <div class="sec">what it does, seen and heard</div>
+    <canvas id="ca-canvas" class="cacanvas" width="330" height="330"></canvas>
+    <div class="kv" id="ca-label"></div>
+    <canvas id="seq-plot" class="plot" width="330" height="68"></canvas>
+    <div class="chip" id="play-seq">play this sequence</div>
     ${novHtml}
     <div class="sec">measured properties</div>
     ${d.properties.length ? d.properties.map(p => `<span class="prop" title="${JSON.stringify(p.detail)}">${p.name}${fmtDetail(p.detail)}</span>`).join('') : '<span style="color:#5b6480">none detected</span>'}
@@ -330,6 +335,47 @@ async function openInspect(id) {
   `;
   inspectBody.querySelectorAll('[data-inv]').forEach(el =>
     el.addEventListener('click', () => openInspect(+el.dataset.inv)));
+  renderBehavior(d);
+}
+
+// the invention, made perceivable: its function run as a cellular automaton (seen),
+// and its sequence as a melody (heard).
+const CA_PAL = ['#070a14', '#3b2f74', '#b36bff', '#ffcf6b'];
+function renderBehavior(d) {
+  const cc = document.getElementById('ca-canvas');
+  const ex = d.exaptation;
+  if (cc && ex && ex.rows) {
+    const g = cc.getContext('2d');
+    const rows = ex.rows, H = rows.length, W = rows[0].length;
+    const cw = cc.width / W, ch = cc.height / H;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      g.fillStyle = CA_PAL[((rows[y][x] % 4) + 4) % 4];
+      g.fillRect(x * cw, y * ch, Math.ceil(cw), Math.ceil(ch));
+    }
+    const lbl = document.getElementById('ca-label');
+    if (lbl) lbl.innerHTML = `<span class="k">its function, run as a cellular automaton:</span> ` +
+      `<span style="color:#b39cff">${ex.label} (estimated class ${ex.class})</span>`;
+  } else if (cc) {
+    const g = cc.getContext('2d'); g.fillStyle = '#070a14'; g.fillRect(0, 0, cc.width, cc.height);
+  }
+  const pc = document.getElementById('seq-plot');
+  if (pc) plotSeq(pc, d.prefix);
+  const pb = document.getElementById('play-seq');
+  if (pb) pb.addEventListener('click', () => { Sound.play(d.prefix); pb.textContent = 'playing...'; setTimeout(() => pb.textContent = 'play this sequence', 1200); });
+}
+
+function plotSeq(c, seq) {
+  const g = c.getContext('2d'); g.clearRect(0, 0, c.width, c.height);
+  const n = Math.min(seq.length, 40); if (n < 2) return;
+  const vals = seq.slice(0, n);
+  const mn = Math.min(...vals), mx = Math.max(...vals), rng = (mx - mn) || 1;
+  const X = i => i / (n - 1) * (c.width - 6) + 3;
+  const Y = v => c.height - ((v - mn) / rng) * (c.height - 10) - 5;
+  g.strokeStyle = '#73e6ff'; g.lineWidth = 1.5; g.beginPath();
+  vals.forEach((v, i) => { const x = X(i), y = Y(v); i ? g.lineTo(x, y) : g.moveTo(x, y); });
+  g.stroke();
+  g.fillStyle = '#ffcf6b';
+  vals.forEach((v, i) => { g.beginPath(); g.arc(X(i), Y(v), 1.7, 0, 6.2832); g.fill(); });
 }
 function closeInspect() { app.openInvId = null; inspect.classList.remove('open'); }
 document.getElementById('close').addEventListener('click', closeInspect);
@@ -369,6 +415,8 @@ function describe(d) {
     s = 'A sequence with no simple closed-form pattern detected' + (d.novelty && d.novelty.status === 'first' ? ', and not found in the OEIS.' : '.');
   if (d.origin === 'immigrant')
     s += ' It was carried in from another civilization during first contact and re-run here to confirm it behaves the same.';
+  if (props['exaptation'] && props['exaptation'].class)
+    s += ` Used for something it was never built for, as a cellular-automaton rule, it produces a ${props['exaptation'].label} pattern (estimated class ${props['exaptation'].class}).`;
   return s;
 }
 
@@ -462,6 +510,13 @@ function handleEvent(e) {
     app.arcs.push({ a: p.a_civ, b: p.b_civ, born: performance.now(), convergent: true });
     app.latest = `convergent invention: two worlds independently reached ${(p.seq || []).slice(0, 6).join(', ')}`;
     flashLine(`convergent: two sealed worlds both invented ${(p.seq || []).slice(0, 7).join(', ')}`, COL.gold);
+    updateReadout();
+  } else if (e.type === 'exaptation') {
+    Organism.flash(0.9);
+    Sound.discovery([]);
+    pulseCell(e.inv_id);
+    app.latest = `exaptation: ${p.symbol} builds a ${p.label} pattern when run as a cellular automaton`;
+    flashLine(`exaptation: a number invention builds a ${p.label} pattern in another domain`, COL.violet);
     updateReadout();
   }
 }

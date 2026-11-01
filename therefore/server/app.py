@@ -21,6 +21,8 @@ from urllib.parse import urlparse, parse_qs
 
 from ..store import Store, DB_PATH
 from ..vm import genome as g
+from ..engine import exapt
+from ..engine.invention import Invention
 
 UI_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "ui")
 _CT = {".html": "text/html", ".js": "application/javascript", ".css": "text/css",
@@ -30,6 +32,26 @@ _CT = {".html": "text/html", ".js": "application/javascript", ".css": "text/css"
 
 def _store():
     return Store(path=DB_PATH, create=False)
+
+
+def _exaptation_render(st, inv):
+    """Recompute the invention's cellular-automaton exaptation for display.
+
+    Loads the civilization's inventions so calls resolve, then evolves the CA whose
+    rule is this invention. Cheap enough to do on a click.
+    """
+    try:
+        import json as _json
+        rows = st.load_inventions(inv["civ_id"], statuses=["alive", "dormant"])
+        reg = {r["id"]: Invention.from_row(r) for r in rows}
+        target = reg.get(inv["id"]) or Invention.from_row(inv)
+        civ = next((c for c in st.get_civs() if c["id"] == inv["civ_id"]), None)
+        laws = _json.loads(civ["laws_json"]) if civ else None
+        sp = exapt.spacetime(target, reg, laws, states=4, width=81, steps=81)
+        cls = exapt.classify(sp)
+        return {"states": sp["states"], "rows": sp["rows"], **cls}
+    except Exception:
+        return None
 
 
 def _invention_detail(st, inv_id):
@@ -71,6 +93,7 @@ def _invention_detail(st, inv_id):
         "properties": props, "experiments": exps, "novelty": novelty,
         "parents": [brief(i) for i in parents],
         "parts": [brief(i) for i in parts],
+        "exaptation": _exaptation_render(st, inv),
     }
 
 

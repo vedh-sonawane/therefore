@@ -16,7 +16,7 @@ import time
 
 from ..vm import type_check
 from ..novelty import check_sequence
-from . import spark, combine, contact, discover as disc, taste as taste_mod, verify
+from . import spark, combine, contact, discover as disc, exapt, taste as taste_mod, verify
 from .civilization import Civilization, create_civilization
 from .experiment import materialize, record, SEQ_LEN
 from .invention import Invention, behavior_hash
@@ -132,6 +132,30 @@ class Engine:
         # 3) evaluate each
         for body, origin, parents, parts in candidates:
             self._evaluate(civ, rng, body, origin, parents, parts)
+
+        # 4) exaptation: try a few inventions in the foreign (cellular automaton) domain
+        self._exapt_pass(civ)
+
+    def _exapt_pass(self, civ):
+        for row in self.store.get_unexapted(civ.id, limit=3):
+            inv = civ.registry.get(row["id"])
+            if inv is None:
+                continue
+            try:
+                st = exapt.spacetime(inv, civ.registry, civ.laws, states=4, width=61, steps=40)
+                cls = exapt.classify(st)
+            except Exception:
+                self.store.set_exapted(row["id"], "error")
+                continue
+            self.store.set_exapted(row["id"], cls["class"])
+            self.store.insert_property(row["id"], "exaptation",
+                                       {"domain": "cellular-automaton", **cls}, self.tick)
+            if exapt.is_notable(cls):
+                # a function invented for numbers turns out to build visible structure
+                self.store.add_event(self.tick, civ.id, row["id"], "exaptation", {
+                    "symbol": inv.symbol, "class": cls["class"], "label": cls["label"],
+                    "seq": inv.prefix[:8],
+                })
 
     def _propose(self, civ, rng):
         cands = []

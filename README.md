@@ -132,10 +132,31 @@ independently. In testing, separate civilizations have independently arrived at 
 numbers, the perfect squares, and the cubes. When it happens it is logged as strong evidence the
 thing is fundamental, and the two worlds briefly connect on screen.
 
+## Exaptation: the same invention, a second life
+
+Feathers evolved for warmth and later enabled flight. An invention here is a function from
+an integer to an integer, invented to generate a sequence. The engine takes that exact
+function and puts it to a job it was never meant for: the transition rule of a cellular
+automaton, where the next state of a cell is the invention applied to the sum of its
+neighbours. Nothing about the function changes. The thing that was a list of numbers becomes
+a spatial, temporal, visible pattern.
+
+Most functions die out or settle into stripes. But a real fraction of them, around a quarter,
+produce nested fractals or genuine chaos. The perfect squares, invented as a number sequence,
+turn into a Sierpinski-like fractal when run this way. When a function turns out to build
+real structure in this foreign domain, it is flagged as a cross-domain discovery, which the
+project treats as the most interesting kind there is: a second, unintended use.
+
+## Seeing and hearing what it invents
+
+You do not read an invention, you perceive it. Open one and you see its function run as a
+cellular automaton, drawn in full, and you see its sequence plotted. Press play and you hear
+it: each term becomes a note, so similar inventions sound similar and you can listen to the
+shape of what it does.
+
 ## Where this is still going
 
-- **exaptation** (testing inventions on problems they were never built for) and
-  **resurrection** of old failures when the laws change,
+- **resurrection** of old failures when the laws change,
 - **evolving taste**, **shifting laws** and **mass extinctions** between eras,
 - and the **ouroboros**: the engine replacing its own parts with things it invented, and showing,
   permanently and prominently, what percentage of therefore was written by therefore.
