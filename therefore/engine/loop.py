@@ -17,7 +17,7 @@ import time
 
 from ..vm import type_check, run
 from ..novelty import check_sequence
-from . import spark, combine, contact, discover as disc, domains, exapt, taste as taste_mod, verify
+from . import spark, combine, contact, discover as disc, domains, exapt, sortnet, taste as taste_mod, verify
 from .civilization import Civilization, create_civilization
 from .experiment import materialize, record, SEQ_LEN
 from .invention import Invention, behavior_hash
@@ -59,6 +59,10 @@ ORGAN_ROLE = {
 }
 ADOPT_INTERVAL = 55      # ticks between adopting an invented function into an organ
 
+# sorting-network discovery (a real, verifiable algorithm-invention domain)
+SORTNET_INTERVAL = 4
+SORTNET_NS = [4, 5, 6, 7, 8, 9, 10]
+
 
 class Engine:
     def __init__(self, store, n_civs=1):
@@ -70,6 +74,14 @@ class Engine:
         self._load_or_create()
         self.civ_by_id = {c.id: c for c in self.civs}
         self.organs = json.loads(store.get_meta("organs", "{}") or "{}")
+        self.sortnet_best = {}
+        for civ in self.civs:
+            for inv in civ.registry.values():
+                if inv.domain == "sortnet" and isinstance(inv.body, dict):
+                    n = inv.body.get("n"); comps = inv.body.get("comparators", [])
+                    key = (civ.id, n); cur = self.sortnet_best.get(key)
+                    if cur is None or len(comps) < cur[0]:
+                        self.sortnet_best[key] = (len(comps), comps, inv.id)
 
     # -- world setup / resume ------------------------------------------------
     def _load_or_create(self):
@@ -320,6 +332,10 @@ class Engine:
         if self.tick % CROSS_INTERVAL == 0:
             self._compose_domains(civ, rng)
 
+        # 6) discovery: invent and shrink a provably-correct sorting network
+        if self.tick % SORTNET_INTERVAL == 0:
+            self._sortnet_pass(civ, rng)
+
     def _exapt_pass(self, civ):
         for row in self.store.get_unexapted(civ.id, limit=3):
             inv = civ.registry.get(row["id"])
@@ -340,6 +356,43 @@ class Engine:
                     "symbol": inv.symbol, "class": cls["class"], "label": cls["label"],
                     "seq": inv.prefix[:8],
                 })
+
+    # -- sorting-network discovery -------------------------------------------
+    def _sortnet_pass(self, civ, rng):
+        n = SORTNET_NS[(self.tick // SORTNET_INTERVAL) % len(SORTNET_NS)]
+        key = (civ.id, n)
+        cur = self.sortnet_best.get(key)
+        if cur is None:
+            net = sortnet.prune(sortnet.bubble(n), n)   # a first valid network
+            self._record_sortnet(civ, n, net, None)
+            return
+        count, comps, prev_id = cur
+        better = sortnet.improve([tuple(c) for c in comps], n, rng, tries=28)
+        if len(better) < count:
+            self._record_sortnet(civ, n, better, prev_id)
+
+    def _record_sortnet(self, civ, n, net, prev_id):
+        net = [list(c) for c in net]
+        count = len(net)
+        best_known = sortnet.KNOWN_OPT.get(n)
+        novelty = ("beats-known" if best_known and count < best_known
+                   else "optimal" if best_known and count == best_known else "valid")
+        bh = behavior_hash(sorted(tuple(c) for c in net) + [("n", n)], True)
+        inv = Invention(
+            id=-(self.tick * 100000 + 70000 + n), civ_id=civ.id,
+            name=f"sort-{n}#{len(civ.registry) + 1}", symbol=civ.new_symbol(),
+            sig_in=(), sig_out="SortNet", body={"kind": "sortnet", "n": n, "comparators": net},
+            parents=([prev_id] if prev_id else []), parts=[], origin="sorting-network",
+            created_tick=self.tick, status="alive", wealth=INIT_WEALTH, behavior_hash=bh,
+            prefix=[count, sortnet.depth(net, n)], total=True, score=float(-count),
+            novelty=novelty, domain="sortnet")
+        inv.id = self.store.insert_invention(inv.to_row())
+        civ.register(inv)
+        self.sortnet_best[(civ.id, n)] = (count, net, inv.id)
+        self.store.add_event(self.tick, civ.id, inv.id, "algorithm", {
+            "symbol": inv.symbol, "n": n, "comparators": count,
+            "best_known": best_known, "depth": sortnet.depth(net, n), "novelty": novelty,
+        })
 
     # -- cross-domain composition --------------------------------------------
     def _compose_domains(self, civ, rng):

@@ -73,6 +73,7 @@
   .row .ty.converge,.row .ty.contact,.row .ty.era,.row .ty.revive,.row .ty.taste,
   .row .ty.figure,.row .ty.melody{color:var(--fg)}
   .row .ty.ouroboros{background:var(--hi);color:#000;padding:1px 7px;justify-self:start}
+  .row .ty.algorithm{color:var(--fg)}
   .row .ty.dormant{color:var(--ghost)}
   .row .ct{color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .row .ct .seq{color:var(--fg)}
@@ -92,6 +93,7 @@
   .detail .ca{width:230px;height:230px;image-rendering:pixelated;border:1px solid var(--rule2);background:#000}
   .detail .fig{width:250px;height:250px;image-rendering:auto}
   .detail .roll{width:100%;max-width:260px;height:160px;image-rendering:auto}
+  .detail .net{width:100%;max-width:300px;height:184px;image-rendering:auto}
   .detail .play{display:inline-block;border:1px solid var(--rule2);color:var(--fg);
     padding:6px 13px;margin-top:10px;cursor:pointer;font-size:12px;user-select:none}
   .detail .play:hover{border-color:var(--faint)}
@@ -150,6 +152,11 @@
         other, drawing a shape), or a <b>melody</b> (one picks each note's pitch, the other its length). The number
         inventions become the real parts of these, so the same idea can live as a number, a pattern, a drawing, or a
         sound.<br><br>
+        <b>It invents real algorithms too.</b> It poses itself genuine problems and discovers solutions it can prove.
+        The clearest case: <b>sorting networks</b>, fixed sequences of compare-and-swap steps that sort any input.
+        Finding small ones is an open research problem, and correctness is checked exhaustively (a network sorts
+        everything if and only if it sorts every binary input). The engine evolves them toward the fewest comparators
+        and verifies every one. This is the pattern for inventing in any field: a problem, a solution, and a proof.<br><br>
         <b>The rules are not fixed.</b> Each world passes through <b>eras</b>, and when an era turns, its laws change:
         operations get more or less expensive, and compute becomes scarce or abundant. Inventions that no longer
         run fall dormant, old failures that suddenly work are <b>resurrected</b>, and now and then a <b>mass

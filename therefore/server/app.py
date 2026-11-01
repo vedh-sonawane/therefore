@@ -21,7 +21,7 @@ from urllib.parse import urlparse, parse_qs
 
 from ..store import Store, DB_PATH
 from ..vm import genome as g
-from ..engine import exapt, domains
+from ..engine import exapt, domains, sortnet
 from ..engine.invention import Invention
 
 UI_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "ui")
@@ -128,6 +128,14 @@ def _invention_detail(st, inv_id):
         reg, laws = _world_registry(st, inv["civ_id"])
         out["spec"] = body
         out[domain] = _figure_render(reg, laws, body) if domain == "figure" else _melody_render(reg, laws, body)
+    elif domain == "sortnet":
+        n = body.get("n"); comps = [tuple(c) for c in body.get("comparators", [])]
+        out["sortnet"] = {
+            "n": n, "comparators": body.get("comparators", []),
+            "count": len(comps), "depth": sortnet.depth(comps, n),
+            "valid": sortnet.is_valid(comps, n), "inputs": 1 << n,
+            "best_known": sortnet.KNOWN_OPT.get(n),
+        }
     return out
 
 

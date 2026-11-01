@@ -50,6 +50,7 @@ const EVENTS = {
   taste:         { tag: 'TASTE',    cls: 'taste' },
   figure:        { tag: 'FIGURE',   cls: 'figure' },
   melody:        { tag: 'MELODY',   cls: 'melody' },
+  algorithm:     { tag: 'ALGORITHM', cls: 'algorithm' },
   ouroboros:     { tag: 'OUROBOROS', cls: 'ouroboros' },
   genesis:       { tag: 'WORLD',    cls: 'world' },
   birth:         { tag: 'INVENT',   cls: 'invent' },
@@ -93,6 +94,11 @@ function lineFor(e) {
       return { inv: e.inv_id, text: `a figure drawn from ${(p.from || []).join(' and ')}`, note: 'two sequences became a shape' };
     case 'melody':
       return { inv: e.inv_id, text: `a melody from ${(p.from || []).join(' and ')}`, note: 'two sequences became a tune' };
+    case 'algorithm': {
+      const bk = p.best_known ? `, best known ${p.best_known}` : '';
+      const tag = p.novelty === 'beats-known' ? ' (beats the best known!)' : p.novelty === 'optimal' ? ' (matches the known optimum)' : '';
+      return { inv: e.inv_id, text: `a sorting network for ${p.n} wires using ${p.comparators} comparators${tag}`, note: `provably sorts every input${bk}` };
+    }
     case 'ouroboros':
       return { inv: e.inv_id, text: `the engine ${p.verb || 'adopts'} ${p.symbol} to run ${p.role}`, note: `${p.pct}% of its machinery is now self-written` };
     case 'genesis':
@@ -166,6 +172,7 @@ async function renderDetail(invId, host) {
   if (!d || d.error) { host.innerHTML = '<div class="kv">not found</div>'; return; }
   if (d.domain === 'figure') renderFigure(d, host);
   else if (d.domain === 'melody') renderMelody(d, host);
+  else if (d.domain === 'sortnet') renderSortnet(d, host);
   else renderNumber(d, host);
   wireChips(host);
 }
@@ -243,6 +250,52 @@ function renderFigure(d, host) {
        ${lineageHTML(d.parts, 'its parts')}
      </div></div>`;
   if (f && f.points) drawFigure(host.querySelector('.fig'), f.points);
+}
+
+function renderSortnet(d, host) {
+  const s = d.sortnet;
+  const verdict = s ? (s.valid
+    ? `verified: it sorts all ${s.inputs} possible inputs correctly.`
+    : `warning: this network does not sort all inputs.`) : '';
+  const cmp = s && s.best_known
+    ? (s.count < s.best_known ? `${s.count} comparators, which beats the best known count of ${s.best_known}.`
+      : s.count === s.best_known ? `${s.count} comparators, matching the known optimum.`
+      : `${s.count} comparators (the best known is ${s.best_known}).`)
+    : (s ? `${s.count} comparators.` : '');
+  host.innerHTML =
+    `<div class="dgrid"><div>
+       <canvas class="ca net" width="360" height="220"></canvas>
+       <div class="caption">each horizontal line is a wire; each vertical link is a compare-and-swap. inputs enter on the left, leave sorted on the right.</div>
+     </div>
+     <div>
+       <h2>${d.symbol} <span style="color:#56565d;font-weight:400">#${d.id}</span></h2>
+       <div class="sub">algorithm &middot; a sorting network for ${s ? s.n : '?'} wires &middot; tick ${d.created_tick}</div>
+       <p class="lead">A sorting network: a fixed sequence of compare-and-swap steps that sorts any input of ${s ? s.n : '?'} items. It uses ${cmp} ${s ? 'Its parallel depth is ' + s.depth + '.' : ''}</p>
+       <div class="kv"><b>${verdict}</b> This is proven exhaustively by the 0/1 principle, not sampled.</div>
+       <div class="fieldlab">the comparators, in order</div>
+       <div class="seqline">${s ? s.comparators.map(c => '(' + c[0] + ',' + c[1] + ')').join('  ') : ''}</div>
+       ${standingHTML(d)}
+       ${lineageHTML(d.parents, 'improved from an earlier network')}
+     </div></div>`;
+  if (s) drawSortnet(host.querySelector('.net'), s.n, s.comparators);
+}
+
+function drawSortnet(cv, n, comps) {
+  const g = cv.getContext('2d'); g.fillStyle = '#000'; g.fillRect(0, 0, cv.width, cv.height);
+  const padL = 10, padR = 10, padT = 16, padB = 16;
+  const wireGap = (cv.height - padT - padB) / Math.max(1, n - 1);
+  const Y = w => padT + w * wireGap;
+  const steps = comps.length + 1;
+  const dx = (cv.width - padL - padR) / (steps + 1);
+  g.strokeStyle = '#56565d'; g.lineWidth = 1;
+  for (let w = 0; w < n; w++) { g.beginPath(); g.moveTo(padL, Y(w)); g.lineTo(cv.width - padR, Y(w)); g.stroke(); }
+  g.strokeStyle = '#e9e9ec'; g.fillStyle = '#e9e9ec'; g.lineWidth = 1.5;
+  comps.forEach((c, k) => {
+    const x = padL + dx * (k + 1), y1 = Y(c[0]), y2 = Y(c[1]);
+    g.beginPath(); g.moveTo(x, y1); g.lineTo(x, y2); g.stroke();
+    g.beginPath(); g.arc(x, y1, 2.6, 0, 6.2832); g.fill();
+    g.beginPath(); g.arc(x, y2, 2.6, 0, 6.2832); g.fill();
+  });
 }
 
 function renderMelody(d, host) {
