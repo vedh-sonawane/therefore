@@ -147,21 +147,39 @@ turn into a Sierpinski-like fractal when run this way. When a function turns out
 real structure in this foreign domain, it is flagged as a cross-domain discovery, which the
 project treats as the most interesting kind there is: a second, unintended use.
 
-## Seeing and hearing what it invents
+## Crossing domains: figures and melodies
 
-You do not read an invention, you perceive it. Open one and you see its function run as a
-cellular automaton, drawn in full, and you see its sequence plotted. Press play and you hear
-it: each term becomes a note, so similar inventions sound similar and you can listen to the
-shape of what it does.
+The engine does not stop at numbers and patterns. It composes the sequences it invents into
+objects in other domains, where the sequences become the real parts:
 
-## Where this is still going
+- a **figure**: a turtle walks a path. One invention decides how much it turns at each step,
+  another how far it moves. Two sequences become a drawn shape.
+- a **melody**: one invention chooses each note's pitch, another its length, snapped to a scale.
+  Two sequences become something you can hear.
 
-- **resurrection** of old failures when the laws change,
-- **evolving taste**, **shifting laws** and **mass extinctions** between eras,
-- and the **ouroboros**: the engine replacing its own parts with things it invented, and showing,
-  permanently and prominently, what percentage of therefore was written by therefore.
+So a single idea can live four ways at once: as a number sequence, a cellular-automaton pattern,
+a drawing, and a sound. Open any invention and you see it, or play it.
 
-That number, climbing, is the whole story.
+## Shifting laws, extinction, resurrection, evolving taste
+
+Each world passes through **eras**. When an era turns, its laws change: operations get cheaper or
+costlier, and compute becomes scarce or abundant. Because an invention only counts if it finishes
+within the compute it is given, this genuinely changes which inventions survive. Old failures that
+suddenly work are **resurrected**; inventions that no longer run fall dormant; and now and then a
+**mass extinction** culls most of a world and forces it to invent its way back. A world's **taste**,
+what it treats as interesting, drifts every era and occasionally has a full revolution, so the
+worlds visibly diverge in what they choose to keep.
+
+## The ouroboros
+
+The engine's own machinery, how many ideas it tries, which inventions it combines, how it judges,
+how it mutates, is built from swappable parts. Over time it fills those parts with functions it
+invented, so it is increasingly run by its own output. A single number is shown, permanently and
+prominently: **written by itself**, the share of that machinery that is now self-authored. It
+climbs as the engine adopts its inventions into itself, and that number climbing is the whole story.
+
+(To be exact and honest: that percentage is the share of the engine's swappable decision
+components, not of its source code.)
 
 <div align="center">
 
