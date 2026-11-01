@@ -60,18 +60,20 @@ ORGAN_ROLE = {
 }
 ADOPT_INTERVAL = 55      # ticks between adopting an invented function into an organ
 
-# sorting-network discovery (a real, verifiable algorithm-invention domain)
+# Discovery domains. Sizes are NOT a fixed list: each world starts small and climbs on
+# its own as it masters a level. The only ceiling is compute (verification cost), not a
+# hardcoded set of problems. Circuit targets are generated from the world's own inventions.
 SORTNET_INTERVAL = 4
-SORTNET_NS = [4, 5, 6, 7, 8, 9, 10]
-
-# further discovery domains: math, science, game theory, logic
+SORTNET_START = 3
+SORTNET_MAX_INPUTS = 1 << 13     # feasibility cap on 2^n exhaustive verification
 MAGIC_INTERVAL = 5
-MAGIC_NS = [3, 4]
+MAGIC_START = 3
+MAGIC_MAX_N = 12
 AUTOMATON_INTERVAL = 5
 STRATEGY_INTERVAL = 7
 CIRCUIT_INTERVAL = 6
-CIRCUIT_NS = [3, 4]
-CIRCUIT_TARGETS = list(circuit.TARGETS.keys())
+CIRCUIT_START = 3
+CIRCUIT_MAX_INPUTS = 1 << 10
 
 
 class Engine:
@@ -88,6 +90,10 @@ class Engine:
         self.magic_done = set()
         self.circuit_best = {}
         self.strategy_best = {}
+        self.frontier = json.loads(store.get_meta("frontiers", "{}") or "{}")
+        self.stall = {}
+        self.circuit_solved = {}
+        self.game_k = {c.id: 2 + (c.seed % 4) for c in self.civs}
         for civ in self.civs:
             for inv in civ.registry.values():
                 b = inv.body if isinstance(inv.body, dict) else {}
@@ -99,13 +105,13 @@ class Engine:
                 elif inv.domain == "magic":
                     self.magic_done.add((civ.id, b.get("n")))
                 elif inv.domain == "circuit":
-                    key = (civ.id, b.get("target"), b.get("n"))
+                    key = (civ.id, b.get("source"), b.get("n"))
                     g = circuit.reachable([tuple(x) for x in b.get("gates", [])], b.get("n", 0))
                     if key not in self.circuit_best or g < self.circuit_best[key]:
                         self.circuit_best[key] = g
                 elif inv.domain == "strategy":
                     pol = b.get("policy", [])
-                    w = strategy.wins(pol) if pol else 0
+                    w = strategy.wins(pol, b.get("k", 3), b.get("maxpile", strategy.MAXPILE)) if pol else 0
                     cur = self.strategy_best.get(civ.id)
                     if cur is None or w > cur[0]:
                         self.strategy_best[civ.id] = (w, pol)
@@ -394,17 +400,28 @@ class Engine:
 
     # -- sorting-network discovery -------------------------------------------
     def _sortnet_pass(self, civ, rng):
-        n = SORTNET_NS[(self.tick // SORTNET_INTERVAL) % len(SORTNET_NS)]
+        front = self._frontier("sortnet", civ, SORTNET_START)
+        n = front
+        if front > SORTNET_START and rng.random() < 0.3:
+            n = rng.randint(SORTNET_START, front)    # sometimes refine a smaller size
         key = (civ.id, n)
         cur = self.sortnet_best.get(key)
         if cur is None:
             net = sortnet.prune(sortnet.bubble(n), n)   # a first valid network
             self._record_sortnet(civ, n, net, None)
+            self.stall[("sortnet", civ.id, n)] = 0
             return
         count, comps, prev_id = cur
         better = sortnet.improve([tuple(c) for c in comps], n, rng, tries=28)
+        sk = ("sortnet", civ.id, n)
         if len(better) < count:
             self._record_sortnet(civ, n, better, prev_id)
+            self.stall[sk] = 0
+        else:
+            self.stall[sk] = self.stall.get(sk, 0) + 1
+            # once the frontier size has been squeezed, climb to a larger one
+            if n == front and self.stall[sk] >= 5 and (1 << (front + 1)) <= SORTNET_MAX_INPUTS:
+                self._bump_frontier("sortnet", civ)
 
     def _record_sortnet(self, civ, n, net, prev_id):
         net = [list(c) for c in net]
@@ -446,10 +463,24 @@ class Engine:
         self.store.add_event(self.tick, civ.id, inv.id, event_type, payload)
         return inv
 
+    # -- self-chosen difficulty: each world climbs from small to large on its own ----
+    def _frontier(self, dom, civ, start):
+        k = f"{dom}:{civ.id}"
+        if k not in self.frontier:
+            self.frontier[k] = start
+        return self.frontier[k]
+
+    def _bump_frontier(self, dom, civ):
+        k = f"{dom}:{civ.id}"
+        self.frontier[k] = self.frontier.get(k, 1) + 1
+        self.store.set_meta("frontiers", json.dumps(self.frontier))
+
     # -- discovery: mathematics (magic squares) ------------------------------
     def _magic_pass(self, civ, rng):
-        n = MAGIC_NS[(self.tick // MAGIC_INTERVAL) % len(MAGIC_NS)]
+        n = self._frontier("magic", civ, MAGIC_START)
         if (civ.id, n) in self.magic_done:
+            if n < MAGIC_MAX_N:
+                self._bump_frontier("magic", civ)   # mastered this size, reach higher
             return
         sq, d = magic.improve(magic.random_square(n, rng), n, rng, tries=4000)
         if d != 0:
@@ -479,43 +510,62 @@ class Engine:
 
     # -- discovery: game theory (winning strategies) -------------------------
     def _strategy_pass(self, civ, rng):
-        winnable = strategy.winnable_count()
+        k = self.game_k[civ.id]                      # this world's own game
+        mp = strategy.MAXPILE
+        winnable = strategy.winnable_count(k, mp)
         cur = self.strategy_best.get(civ.id)
         if cur is None:
-            policy, w = strategy.improve(strategy.random_policy(rng), rng, tries=120)
+            policy, w = strategy.improve(strategy.random_policy(rng, k, mp), rng, k, mp, tries=120)
         else:
-            policy, w = strategy.improve(list(cur[1]), rng, tries=160)
+            policy, w = strategy.improve(list(cur[1]), rng, k, mp, tries=160)
         if cur is not None and w <= cur[0]:
             return
         self.strategy_best[civ.id] = (w, policy)
         self._register_domain(
             civ, "strategy", "strategy", "Strategy",
-            {"kind": "strategy", "k": strategy.K, "maxpile": strategy.MAXPILE, "policy": policy},
-            prefix=["strat", w] + policy, score=float(w),
+            {"kind": "strategy", "k": k, "maxpile": mp, "policy": policy},
+            prefix=["strat", k, w] + policy, score=float(w),
             novelty="optimal" if w >= winnable else "partial",
-            props=[("plays", {"wins": w, "winnable": winnable})],
+            props=[("plays", {"wins": w, "winnable": winnable, "remove_up_to": k})],
             event_type="strategy",
-            payload={"wins": w, "winnable": winnable, "optimal": w >= winnable})
+            payload={"wins": w, "winnable": winnable, "optimal": w >= winnable, "k": k})
 
-    # -- discovery: logic (boolean circuits) ---------------------------------
+    # -- discovery: logic (boolean circuits for self-generated targets) -------
     def _circuit_pass(self, civ, rng):
-        name = CIRCUIT_TARGETS[(self.tick // CIRCUIT_INTERVAL) % len(CIRCUIT_TARGETS)]
-        n = CIRCUIT_NS[(self.tick // CIRCUIT_INTERVAL // len(CIRCUIT_TARGETS)) % len(CIRCUIT_NS)]
-        gates, fit = circuit.search(name, n, rng)
+        sources = civ.alive_total()
+        if not sources:
+            return
+        n = self._frontier("circuit", civ, CIRCUIT_START)
+        fn = rng.choice(sources)
+        # the target is generated by the world itself: the parity of this invented
+        # function's output across every input. Not a hardcoded function.
+        target = []
+        for x in range(1 << n):
+            r = run(fn, [x], civ.registry, laws=civ.laws, fuel=15000)
+            v = r.value if (r.ok and isinstance(r.value, int) and not isinstance(r.value, bool)) else 0
+            target.append(v & 1)
+        target = tuple(target)
+        if len(set(target)) < 2:
+            return                                   # trivial (constant) target, skip
+        gates, fit = circuit.search(target, n, rng)
         if fit < 1.0:
             return
         used = circuit.reachable([tuple(g) for g in gates], n)
-        key = (civ.id, name, n)
+        key = (civ.id, fn.id, n)
         if key in self.circuit_best and used >= self.circuit_best[key]:
             return
         self.circuit_best[key] = used
         self._register_domain(
             civ, "circuit", "circuit", "Circuit",
-            {"kind": "circuit", "n": n, "target": name, "gates": gates},
-            prefix=[n, used], score=float(-used), novelty="verified",
-            props=[("computes", {"function": name, "gates": used})],
-            event_type="circuit",
-            payload={"target": name, "n": n, "gates": used, "inputs": 1 << n})
+            {"kind": "circuit", "n": n, "source": fn.id, "gates": gates},
+            prefix=[n, used, fn.id], score=float(-used), novelty="verified",
+            props=[("computes", {"of": fn.symbol, "gates": used})],
+            event_type="circuit", parts=[fn.id],
+            payload={"source": fn.symbol, "n": n, "gates": used, "inputs": 1 << n})
+        self._pay_parts(civ, [fn.id])
+        self.circuit_solved[civ.id] = self.circuit_solved.get(civ.id, 0) + 1
+        if self.circuit_solved[civ.id] % 4 == 0 and (1 << (n + 1)) <= CIRCUIT_MAX_INPUTS:
+            self._bump_frontier("circuit", civ)
 
     # -- cross-domain composition --------------------------------------------
     def _compose_domains(self, civ, rng):

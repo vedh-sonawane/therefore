@@ -5,16 +5,13 @@ and earlier gates, with the last gate as the output. The engine searches for a c
 that computes a target boolean function, and correctness is checked exhaustively against
 the function's full truth table (all 2^n inputs). A circuit is only kept when it is
 exactly right; then dead logic is stripped to report the real gate count.
+
+The target function is NOT hardcoded. The engine generates it from one of its own invented
+number functions (the parity of that function's output over each input), so the problem it
+solves is one it posed itself, and the circuit becomes a hardware form of an invention.
 """
 
 OPS = ["and", "or", "xor", "nand", "nor", "not"]
-
-TARGETS = {
-    "parity": lambda b: sum(b) % 2,
-    "majority": lambda b: 1 if sum(b) * 2 > len(b) else 0,
-    "at-least-two": lambda b: 1 if sum(b) >= 2 else 0,
-    "all-equal": lambda b: 1 if len(set(b)) == 1 else 0,
-}
 
 
 def _gate(op, x, y):
@@ -35,11 +32,6 @@ def eval_circuit(gates, n, bits):
 
 def truth_vector(gates, n):
     return tuple(eval_circuit(gates, n, [(x >> k) & 1 for k in range(n)]) for x in range(1 << n))
-
-
-def target_vector(name, n):
-    f = TARGETS[name]
-    return tuple(f([(x >> k) & 1 for k in range(n)]) for x in range(1 << n))
 
 
 def random_gate(n, upto, rng):
@@ -76,10 +68,9 @@ def fitness(gates, n, target_vec):
     return sum(1 for i in range(len(v)) if v[i] == target_vec[i]) / len(v)
 
 
-def search(name, n, rng, size=7, budget=350, restarts=6):
-    """Hill-climb toward a target function, with restarts to escape plateaus.
+def search(target, n, rng, size=7, budget=350, restarts=6):
+    """Hill-climb toward a target truth vector, with restarts to escape plateaus.
     Returns the best (gates, fitness) found."""
-    target = target_vector(name, n)
     g_best, g_fit = None, -1.0
     for _ in range(restarts):
         cur = random_circuit(n, size, rng)

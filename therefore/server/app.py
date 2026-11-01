@@ -20,7 +20,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
 from ..store import Store, DB_PATH
-from ..vm import genome as g
+from ..vm import genome as g, run as vmrun
 from ..engine import exapt, domains, sortnet, magic, automaton, strategy, circuit
 from ..engine.invention import Invention
 
@@ -153,12 +153,22 @@ def _invention_detail(st, inv_id):
                            "winnable": strategy.winnable_count(),
                            "optimal": w >= strategy.winnable_count()}
     elif domain == "circuit":
-        n = body.get("n"); gates = body.get("gates", []); name = body.get("target")
-        gt = [tuple(g) for g in gates]
-        valid = circuit.truth_vector(gt, n) == circuit.target_vector(name, n)
-        out["circuit"] = {"n": n, "target": name, "gates": gates,
-                          "used": circuit.reachable(gt, n), "valid": valid,
-                          "inputs": 1 << n}
+        n = body.get("n"); gates = body.get("gates", []); src_id = body.get("source")
+        gt = [tuple(gg) for gg in gates]
+        reg, laws = _world_registry(st, inv["civ_id"])
+        src = reg.get(src_id)
+        target = None
+        if src is not None:
+            tv = []
+            for x in range(1 << n):
+                r = vmrun(src, [x], reg, laws=laws, fuel=15000)
+                v = r.value if (r.ok and isinstance(r.value, int) and not isinstance(r.value, bool)) else 0
+                tv.append(v & 1)
+            target = tuple(tv)
+        valid = (circuit.truth_vector(gt, n) == target) if target is not None else None
+        out["circuit"] = {"n": n, "source": src.symbol if src else "?", "source_id": src_id,
+                          "gates": gates, "used": circuit.reachable(gt, n),
+                          "valid": valid, "inputs": 1 << n}
     return out
 
 
