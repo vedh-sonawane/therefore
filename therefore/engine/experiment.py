@@ -13,11 +13,18 @@ TERM_FUEL = 60_000     # fuel budget per term
 
 
 def materialize(inv, registry, laws, length=SEQ_LEN):
-    """Run inv(n) for n in 0..length-1. Returns (prefix, total, stop, ops)."""
+    """Run inv(n) for n in 0..length-1. Returns (prefix, total, stop, ops).
+
+    The per-term fuel is the era's available compute: laws['_energy'] scales it, so
+    when a civilization's laws make compute scarce, expensive inventions stop being
+    total, and when compute is abundant, old failures can complete again.
+    """
+    energy = (laws.get("_energy", 1.0) if laws else 1.0)
+    fuel = max(2000, int(TERM_FUEL * energy))
     prefix = []
     total_ops = 0
     for n in range(length):
-        r = run(inv, [n], registry, laws=laws, fuel=TERM_FUEL)
+        r = run(inv, [n], registry, laws=laws, fuel=fuel)
         total_ops += r.ops
         if not r.ok or not isinstance(r.value, int) or isinstance(r.value, bool):
             return prefix, False, n, total_ops

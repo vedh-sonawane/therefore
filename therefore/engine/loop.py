@@ -10,6 +10,7 @@ Everything that happens is written to the one SQLite world as it happens, so clo
 and reopening resumes exactly here.
 """
 
+import json
 import random
 import threading
 import time
@@ -36,6 +37,12 @@ OEIS_BUDGET = 3          # max live OEIS lookups per tick (cached ones are free)
 # first contact
 CONTACT_INTERVAL = 22    # ticks between contact attempts
 CIV_NAMES = ["Aurorae", "Basilisk", "Cinder", "Delphi", "Ember", "Fathom", "Gyre"]
+
+# eras and shifting laws
+ERA_LENGTH = 80          # ticks per era
+EXTINCT_EVERY = 3        # every Nth era, a mass extinction
+RETEST_CAP = 160         # how many inventions to retest under the new laws per era
+ENERGY_CHOICES = [0.18, 0.3, 0.5, 1.0, 1.0, 1.6, 2.2]  # scarce .. abundant compute
 
 
 class Engine:
@@ -82,8 +89,98 @@ class Engine:
                 self._step_civ(civ)
         if len(self.civs) >= 2 and self.tick % CONTACT_INTERVAL == 0:
             self._first_contact()
+        if self.tick % ERA_LENGTH == 0:
+            self._era_transition()
         self.store.set_meta("tick", self.tick)
         return self.tick
+
+    # -- eras: the laws of each world change, and the population is retested ----
+    def _era_transition(self):
+        rng = random.Random((self.tick * 777747 + 13) & 0xFFFFFFFF)
+        for civ in self.civs:
+            if not civ_alive(civ):
+                continue
+            civ.era += 1
+            changed = self._shift_laws(civ, rng)
+            self.store.update_civ(civ.id, era=civ.era, laws_json=json.dumps(civ.laws))
+            self.store.add_event(self.tick, civ.id, None, "era",
+                                 {"era": civ.era, "glyph": civ.glyph, "changed": changed,
+                                  "energy": round(civ.laws.get("_energy", 1.0), 2)})
+            revived, broke = self._retest(civ, rng)
+            if revived:
+                self.store.add_event(self.tick, civ.id, None, "resurrection",
+                                     {"count": revived, "glyph": civ.glyph,
+                                      "note": "old failures that work under the new laws"})
+            if broke:
+                self.store.add_event(self.tick, civ.id, None, "law_death",
+                                     {"count": broke, "glyph": civ.glyph})
+            if civ.era % EXTINCT_EVERY == 0:
+                killed = self._mass_extinction(civ)
+                if killed:
+                    self.store.add_event(self.tick, civ.id, None, "extinction",
+                                         {"count": killed, "glyph": civ.glyph,
+                                          "note": "most of the population fell dormant"})
+
+    def _shift_laws(self, civ, rng):
+        """Mutate a civilization's laws: operation costs and the era's compute energy."""
+        laws = dict(civ.laws)
+        keys = [k for k in laws if not k.startswith("_")]
+        desc = []
+        for k in rng.sample(keys, k=min(3, len(keys))):
+            roll = rng.random()
+            if roll < 0.4:
+                laws[k] = laws[k] + rng.choice([4, 8, 16]); desc.append(f"{k} costlier")
+            elif roll < 0.75:
+                laws[k] = max(1, laws[k] - rng.choice([1, 2, 3])); desc.append(f"{k} cheaper")
+            else:
+                laws[k] = rng.randint(1, 8); desc.append(f"{k} reset")
+        prev = laws.get("_energy", 1.0)
+        laws["_energy"] = rng.choice(ENERGY_CHOICES)
+        if laws["_energy"] < prev * 0.7:
+            desc.append("compute scarce")
+        elif laws["_energy"] > prev * 1.3:
+            desc.append("compute abundant")
+        civ.laws = laws
+        return desc
+
+    def _retest(self, civ, rng):
+        """Re-run inventions under the new laws. Some alive ones no longer complete and
+        fall dormant; some dormant failures now complete and are resurrected."""
+        members = list(civ.registry.values())
+        dormant = [i for i in members if i.status == "dormant"]
+        alive = [i for i in members if i.status == "alive"]
+        revived = broke = 0
+        for inv in rng.sample(dormant, min(RETEST_CAP, len(dormant))):
+            prefix, total, _stop, _ops = materialize(inv, civ.registry, civ.laws)
+            if total and len(prefix) >= 6 and len(set(prefix)) >= 4:
+                props = disc.discover(prefix)
+                if any(p[0] not in ("distinct-values", "non-negative", "positive") for p in props):
+                    inv.status = "alive"; inv.wealth = INIT_WEALTH; inv.total = True
+                    inv.prefix = prefix; inv.behavior_hash = behavior_hash(prefix, True)
+                    self.store.update_invention(
+                        inv.id, status="alive", wealth=INIT_WEALTH, total=1,
+                        prefix_json=json.dumps(prefix), behavior_hash=inv.behavior_hash,
+                        exapted=0)
+                    revived += 1
+        for inv in rng.sample(alive, min(RETEST_CAP, len(alive))):
+            prefix, total, _stop, _ops = materialize(inv, civ.registry, civ.laws)
+            if not total:
+                inv.status = "dormant"
+                self.store.update_invention(inv.id, status="dormant")
+                broke += 1
+        return revived, broke
+
+    def _mass_extinction(self, civ):
+        alive = [i for i in civ.registry.values() if i.status == "alive"]
+        if len(alive) < 16:
+            return 0
+        alive.sort(key=lambda i: i.wealth, reverse=True)
+        keep = max(10, int(len(alive) * 0.15))
+        doomed = alive[keep:]
+        for inv in doomed:
+            inv.status = "dormant"
+        self.store.bulk_status([i.id for i in doomed], "dormant")
+        return len(doomed)
 
     # -- first contact between two sealed civilizations ----------------------
     def _first_contact(self):

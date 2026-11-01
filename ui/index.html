@@ -52,11 +52,6 @@
   nav .tab:hover{color:var(--dim)}
   nav .tab.on{color:var(--fg);border-bottom-color:var(--fg)}
   nav .spacer{flex:1}
-  nav .livetag{align-self:center;font-size:10px;letter-spacing:.2em;color:var(--faint);
-    display:flex;align-items:center;gap:7px;padding-right:2px}
-  nav .livetag .d{width:6px;height:6px;background:var(--fg);border-radius:50%;
-    animation:blink 1.6s steps(1) infinite}
-  @keyframes blink{50%{opacity:.15}}
 
   /* main scroll area */
   main{flex:1 1 auto;overflow-y:auto;overflow-x:hidden}
@@ -74,7 +69,8 @@
   .row .tk{color:var(--faint);font-variant-numeric:tabular-nums;font-size:12px}
   .row .ty{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
   .row .ty.first{background:var(--hi);color:#000;padding:1px 7px;justify-self:start}
-  .row .ty.converge,.row .ty.contact{color:var(--fg)}
+  .row .ty.extinct{background:#2a2a2e;color:var(--fg);padding:1px 7px;justify-self:start}
+  .row .ty.converge,.row .ty.contact,.row .ty.era,.row .ty.revive{color:var(--fg)}
   .row .ty.dormant{color:var(--ghost)}
   .row .ct{color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .row .ct .seq{color:var(--fg)}
@@ -141,7 +137,11 @@
         It also takes each invented function and <b>re-uses it as a cellular-automaton rule</b>, turning the
         number sequence into a visible black-and-white pattern (open any invention to see it). Several sealed
         worlds run at once; when two of them invent the same thing on their own, that is flagged as evidence the
-        thing is fundamental.
+        thing is fundamental.<br><br>
+        <b>The rules are not fixed.</b> Each world passes through <b>eras</b>, and when an era turns, its laws change:
+        operations get more or less expensive, and compute becomes scarce or abundant. Inventions that no longer
+        run fall dormant, old failures that suddenly work are <b>resurrected</b>, and now and then a <b>mass
+        extinction</b> wipes out most of a world and forces it to invent its way back.
       </div>
       <div class="stats" id="stats"></div>
     </div>
@@ -153,7 +153,6 @@
       <div class="tab" data-view="firsts">firsts</div>
       <div class="tab" data-view="worlds">worlds</div>
       <div class="spacer"></div>
-      <div class="livetag"><span class="d"></span>LIVE</div>
     </div>
   </nav>
 

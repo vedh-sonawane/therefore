@@ -256,6 +256,15 @@ class Store:
             self.conn.commit()
             return dead
 
+    def bulk_status(self, ids, status):
+        if not ids:
+            return
+        with self._lock:
+            q = ",".join("?" * len(ids))
+            self.conn.execute(
+                f"UPDATE inventions SET status=? WHERE id IN ({q})", (status, *ids))
+            self.conn.commit()
+
     def load_inventions(self, civ_id=None, statuses=None):
         q = "SELECT * FROM inventions"
         conds, args = [], []

@@ -44,6 +44,9 @@ const EVENTS = {
   exaptation:    { tag: 'EXAPT',    cls: 'exapt' },
   convergent:    { tag: 'CONVERGE', cls: 'converge' },
   first_contact: { tag: 'CONTACT',  cls: 'contact' },
+  era:           { tag: 'ERA',      cls: 'era' },
+  extinction:    { tag: 'EXTINCT',  cls: 'extinct' },
+  resurrection:  { tag: 'REVIVE',   cls: 'revive' },
   genesis:       { tag: 'WORLD',    cls: 'world' },
   birth:         { tag: 'INVENT',   cls: 'invent' },
 };
@@ -63,6 +66,13 @@ function lineFor(e) {
       return { inv: e.inv_id, seq: (p.seq || []).join(' '), note: 'invented in two worlds independently' };
     case 'first_contact':
       return { text: `${p.from_glyph} met ${p.to_glyph}`, note: `carried ${p.new} invention(s) across` };
+    case 'era':
+      return { text: `${p.glyph} enters era ${p.era}`,
+        note: `${(p.changed || []).join(', ')}${p.energy !== undefined ? ` - compute x${p.energy}` : ''}` };
+    case 'extinction':
+      return { text: `mass extinction in ${p.glyph}: ${p.count} inventions fell dormant`, note: 'the survivors repopulate' };
+    case 'resurrection':
+      return { text: `${p.count} dormant inventions revived in ${p.glyph}`, note: 'old failures that work under the new laws' };
     case 'genesis':
       return { text: `${p.glyph || ''} ${p.name} begins`, note: 'a new world' };
     default: return null;
@@ -228,7 +238,7 @@ async function loadWorlds() {
   state.snap.civs.forEach(c => {
     const row = el('div', 'row');
     row.innerHTML = `<span class="tk">${c.glyph}</span><span class="ty">${c.name.toUpperCase()}</span>` +
-      `<span class="ct"><span class="seq">${c.alive} alive, ${c.dormant} dormant</span>` +
+      `<span class="ct"><span class="seq">era ${c.era} &middot; ${c.alive} alive, ${c.dormant} dormant</span>` +
       `<span class="note">${c.firsts} firsts, richest invention worth ${c.max_wealth}</span></span>`;
     row.addEventListener('click', () => toggleWorld(row, c.id));
     host.appendChild(row);
