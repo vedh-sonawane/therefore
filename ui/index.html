@@ -2,179 +2,189 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>therefore</title>
 <style>
   :root{
-    --bg:#06070c; --bg2:#0b0e18;
-    --ink:#eef1fb; --ink2:#9aa3bf; --ink3:#5b6480;
-    --line:rgba(141,154,196,.14);
-    --gold:#ffce6a; --cyan:#74e6ff; --violet:#b69cff; --green:#78f0b0; --red:#ff6f8d;
-    --r:12px; --r2:9px;
-    --mono:ui-monospace,"Cascadia Code","JetBrains Mono","SFMono-Regular",Consolas,monospace;
+    --bg:#0b0b0c;
+    --fg:#e9e9ec; --dim:#8c8c93; --faint:#56565d; --ghost:#34343a;
+    --rule:#1f1f22; --rule2:#2b2b2f; --hi:#ffffff;
+    --mono:"SFMono-Regular","JetBrains Mono","Cascadia Mono",Menlo,Consolas,monospace;
   }
   *{box-sizing:border-box}
-  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
-    font-family:var(--mono);overflow:hidden;-webkit-font-smoothing:antialiased;
-    text-rendering:optimizeLegibility}
-  canvas{position:fixed;inset:0;display:block}
-  #gl{z-index:0}
-  #scene{z-index:1}
-  button{font-family:inherit}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);
+    font-family:var(--mono);font-size:13.5px;line-height:1.5;
+    -webkit-font-smoothing:antialiased}
+  body{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+  a{color:var(--fg);text-decoration:underline;text-underline-offset:2px}
+  a:hover{color:var(--hi)}
+  ::selection{background:#2a2a30}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:#242428;border:3px solid var(--bg)}
 
-  /* ---------- top bar ---------- */
-  #topbar{position:fixed;z-index:6;top:0;left:0;right:0;height:58px;display:flex;
-    align-items:center;justify-content:space-between;padding:0 22px;pointer-events:none;
-    background:linear-gradient(180deg,rgba(6,7,12,.72),rgba(6,7,12,0))}
-  .brand{display:flex;align-items:baseline;gap:12px;pointer-events:auto}
-  .brand .mark{font-size:22px;color:var(--ink);text-shadow:0 0 22px rgba(116,230,255,.35)}
-  .brand .word{font-size:13px;letter-spacing:.46em;color:var(--ink2);text-transform:lowercase}
-  .crumbs{font-size:12px;letter-spacing:.08em;color:var(--ink3);margin-left:8px}
-  .crumbs b{color:var(--ink2);font-weight:500;cursor:pointer}
-  .crumbs b:hover{color:var(--ink)}
-  #status{display:flex;gap:16px;align-items:center;pointer-events:auto;
-    font-size:12px;color:var(--ink2);letter-spacing:.04em}
-  #status .stat b{color:var(--ink);font-weight:600}
-  #status .stat .lab{color:var(--ink3);font-size:10px;letter-spacing:.14em;text-transform:uppercase}
-  #status .gold b{color:var(--gold)}
+  .wrap{width:100%;max-width:1120px;margin:0 auto;padding:0 28px}
 
-  /* ---------- discovery stream ---------- */
-  #stream{position:fixed;z-index:5;top:66px;right:16px;width:320px;max-height:calc(100vh - 150px);
-    display:flex;flex-direction:column;gap:9px;overflow:hidden;pointer-events:none;
-    transition:opacity .4s, transform .4s}
-  #stream.hidden{opacity:0;transform:translateX(30px);pointer-events:none}
-  .streamhead{display:flex;align-items:center;justify-content:space-between;
-    font-size:10px;letter-spacing:.26em;text-transform:uppercase;color:var(--ink3);
-    padding:0 4px 2px}
-  .streamhead .live{display:flex;align-items:center;gap:6px}
-  .dot{width:6px;height:6px;border-radius:50%;background:var(--green);
-    box-shadow:0 0 8px var(--green);animation:pulse 1.8s infinite}
-  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
-  .card{pointer-events:auto;position:relative;display:flex;gap:11px;align-items:flex-start;
-    background:linear-gradient(180deg,rgba(14,17,28,.82),rgba(11,14,24,.82));
-    border:1px solid var(--line);border-radius:var(--r2);padding:10px 12px 10px 14px;
-    backdrop-filter:blur(9px);cursor:pointer;overflow:hidden;
-    animation:slidein .5s cubic-bezier(.2,.9,.2,1)}
-  .card:hover{border-color:rgba(141,154,196,.3)}
-  @keyframes slidein{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
-  .card .bar{position:absolute;left:0;top:0;bottom:0;width:3px}
-  .card .body{flex:1;min-width:0}
-  .card .tag{font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;font-weight:700}
-  .card .tick{float:right;font-size:10px;color:var(--ink3);letter-spacing:.06em}
-  .card .main{font-size:12.5px;color:var(--ink);margin-top:3px;white-space:nowrap;
-    overflow:hidden;text-overflow:ellipsis}
-  .card .cap{font-size:10.5px;color:var(--ink2);margin-top:3px;white-space:nowrap;
-    overflow:hidden;text-overflow:ellipsis}
-  .card canvas{width:46px;height:46px;border-radius:6px;image-rendering:pixelated;
-    border:1px solid rgba(141,154,196,.2);flex-shrink:0;background:#070a14}
-  .t-first{color:var(--gold)} .b-first{background:var(--gold)}
-  .t-convergent{color:var(--gold)} .b-convergent{background:linear-gradient(var(--gold),var(--cyan))}
-  .t-exaptation{color:var(--violet)} .b-exaptation{background:var(--violet)}
-  .t-known{color:var(--cyan)} .b-known{background:var(--cyan)}
-  .t-contact{color:var(--green)} .b-contact{background:var(--green)}
-  .t-genesis{color:var(--cyan)} .b-genesis{background:var(--cyan)}
+  /* header */
+  header{border-bottom:1px solid var(--rule);flex:0 0 auto;padding:18px 0 0}
+  .titlerow{display:flex;align-items:baseline;justify-content:space-between}
+  .logo{font-size:16px;letter-spacing:.02em}
+  .logo .mk{color:var(--fg)} .logo .nm{color:var(--dim);letter-spacing:.34em;margin-left:10px}
+  .whatlink{font-size:11px;color:var(--faint);cursor:pointer;letter-spacing:.06em;
+    border:1px solid var(--rule2);padding:4px 10px}
+  .whatlink:hover{color:var(--fg);border-color:var(--faint)}
+  .tagline{color:var(--dim);font-size:12px;margin:8px 0 0}
 
-  /* ---------- inspection ---------- */
-  #inspect{position:fixed;z-index:7;top:0;right:0;height:100vh;width:min(430px,94vw);
-    transform:translateX(103%);transition:transform .5s cubic-bezier(.2,.85,.2,1);
-    background:linear-gradient(180deg,rgba(9,11,19,.94),rgba(8,10,17,.98));
-    backdrop-filter:blur(16px);border-left:1px solid var(--line);
-    padding:64px 24px 28px;overflow-y:auto;pointer-events:auto}
-  #inspect.open{transform:none;box-shadow:-30px 0 80px rgba(0,0,0,.5)}
-  #inspect::-webkit-scrollbar{width:8px}
-  #inspect::-webkit-scrollbar-thumb{background:rgba(141,154,196,.2);border-radius:4px}
-  #inspect h1{font-size:40px;margin:0;line-height:1;letter-spacing:.02em;font-weight:500;
-    text-shadow:0 0 28px rgba(116,230,255,.3)}
-  #inspect .sub{color:var(--ink3);font-size:10.5px;letter-spacing:.16em;
-    text-transform:uppercase;margin:8px 0 16px}
-  #inspect .what{font-size:14px;color:var(--ink);line-height:1.6;margin:0 0 16px;
-    padding:12px 14px;border-radius:var(--r2);border:1px solid rgba(255,206,106,.28);
-    background:rgba(255,206,106,.06)}
-  #inspect .seq{font-size:13px;color:var(--cyan);word-break:break-word;line-height:1.7;
-    background:rgba(116,230,255,.05);padding:9px 12px;border-radius:var(--r2)}
-  #inspect .sec{margin:22px 0 9px;color:var(--ink3);font-size:10px;letter-spacing:.24em;
-    text-transform:uppercase}
-  #inspect .cacanvas{width:100%;aspect-ratio:1;image-rendering:pixelated;border-radius:var(--r2);
-    border:1px solid rgba(182,156,255,.25);display:block;background:#070a14}
-  #inspect .carow{display:flex;gap:14px;align-items:flex-start}
-  #inspect .cameta{flex:1}
-  #inspect .classbadge{display:inline-block;padding:4px 10px;border-radius:20px;font-size:11px;
-    border:1px solid rgba(182,156,255,.4);color:var(--violet);margin-bottom:8px}
-  #inspect .plot{width:100%;height:60px;display:block;margin:10px 0 8px;border-radius:var(--r2);
-    background:rgba(0,0,0,.25);border:1px solid var(--line)}
-  #inspect .prop{display:inline-block;margin:3px 5px 3px 0;padding:3px 10px;font-size:11px;
-    border:1px solid rgba(182,156,255,.32);color:var(--violet);border-radius:20px}
-  #inspect .kv{font-size:12px;color:var(--ink);margin:5px 0}
-  #inspect .kv .k{color:var(--ink3)}
-  #inspect a{color:var(--cyan)}
-  #inspect .genome{font-size:11px;color:#9fb0d8;white-space:pre-wrap;line-height:1.5;
-    background:rgba(0,0,0,.32);padding:11px;border-radius:var(--r2);border:1px solid var(--line)}
-  #inspect .chip{cursor:pointer;display:inline-block;margin:4px 6px 4px 0;padding:5px 11px;
-    border:1px solid rgba(116,230,255,.3);border-radius:var(--r2);font-size:12px;color:var(--cyan)}
-  #inspect .chip:hover{background:rgba(116,230,255,.1)}
-  #inspect .btn{cursor:pointer;display:inline-flex;align-items:center;gap:7px;margin-top:6px;
-    padding:8px 14px;border-radius:var(--r2);font-size:12px;color:var(--ink);
-    border:1px solid rgba(116,230,255,.35);background:rgba(116,230,255,.07)}
-  #inspect .btn:hover{background:rgba(116,230,255,.15)}
-  #close{position:absolute;top:20px;right:22px;cursor:pointer;color:var(--ink3);font-size:15px;
-    width:30px;height:30px;display:flex;align-items:center;justify-content:center;
-    border-radius:50%;border:1px solid var(--line)}
-  #close:hover{color:var(--ink);border-color:rgba(141,154,196,.4)}
+  .explain{display:none;margin:14px 0 0;padding:14px 16px;border:1px solid var(--rule2);
+    background:#101012;color:var(--dim);font-size:12.5px;line-height:1.75;max-width:760px}
+  .explain.open{display:block}
+  .explain b{color:var(--fg);font-weight:500}
+  .explain .step{color:var(--faint)}
 
-  /* ---------- bottom controls ---------- */
-  #dock{position:fixed;z-index:6;left:0;right:0;bottom:16px;display:flex;justify-content:center;
-    gap:10px;pointer-events:none}
-  .pill{pointer-events:auto;cursor:pointer;font-size:11px;letter-spacing:.14em;color:var(--ink2);
-    border:1px solid var(--line);border-radius:22px;padding:7px 15px;
-    background:rgba(11,14,24,.6);backdrop-filter:blur(8px);user-select:none}
-  .pill:hover{color:var(--ink);border-color:rgba(141,154,196,.35)}
-  .pill.on{color:var(--green);border-color:rgba(120,240,176,.4)}
+  /* stat bar */
+  .stats{display:flex;gap:34px;padding:14px 0 15px;flex-wrap:wrap}
+  .stat .n{font-size:19px;color:var(--fg);font-variant-numeric:tabular-nums}
+  .stat .l{font-size:10px;color:var(--faint);letter-spacing:.2em;text-transform:uppercase;margin-top:1px}
 
-  /* ---------- onboarding + hint + tooltip ---------- */
-  #hint{position:fixed;z-index:6;left:22px;bottom:20px;font-size:11px;color:var(--ink3);
-    letter-spacing:.08em;max-width:340px;line-height:1.7;pointer-events:none}
-  #hint b{color:var(--ink2);font-weight:500}
-  #tip{position:fixed;z-index:9;pointer-events:none;background:rgba(10,12,20,.95);
-    border:1px solid rgba(116,230,255,.25);padding:7px 10px;border-radius:8px;font-size:12px;
-    color:var(--ink);transform:translate(-50%,-135%);display:none;white-space:nowrap;
-    box-shadow:0 10px 40px rgba(0,0,0,.6)}
-  .flash{position:fixed;z-index:8;left:50%;transform:translateX(-50%);
-    font-size:13px;letter-spacing:.1em;white-space:nowrap;pointer-events:none;
-    text-shadow:0 0 22px currentColor;animation:fl 2.6s forwards}
-  @keyframes fl{0%{opacity:0;transform:translate(-50%,8px)}12%{opacity:1;transform:translate(-50%,0)}
-    80%{opacity:1}100%{opacity:0}}
+  /* tabs */
+  nav{display:flex;gap:2px;border-bottom:1px solid var(--rule);flex:0 0 auto}
+  nav .tab{padding:9px 16px;font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--faint);cursor:pointer;border-bottom:1px solid transparent;margin-bottom:-1px}
+  nav .tab:hover{color:var(--dim)}
+  nav .tab.on{color:var(--fg);border-bottom-color:var(--fg)}
+  nav .spacer{flex:1}
+  nav .livetag{align-self:center;font-size:10px;letter-spacing:.2em;color:var(--faint);
+    display:flex;align-items:center;gap:7px;padding-right:2px}
+  nav .livetag .d{width:6px;height:6px;background:var(--fg);border-radius:50%;
+    animation:blink 1.6s steps(1) infinite}
+  @keyframes blink{50%{opacity:.15}}
+
+  /* main scroll area */
+  main{flex:1 1 auto;overflow-y:auto;overflow-x:hidden}
+  .view{display:none;padding:10px 0 60px} .view.on{display:block}
+
+  /* column header */
+  .colhead{display:grid;grid-template-columns:62px 112px 1fr;gap:16px;padding:8px 12px;
+    color:var(--faint);font-size:10px;letter-spacing:.18em;text-transform:uppercase;
+    border-bottom:1px solid var(--rule);position:sticky;top:0;background:var(--bg);z-index:2}
+
+  /* ledger rows */
+  .row{display:grid;grid-template-columns:62px 112px 1fr;gap:16px;padding:8px 12px;
+    border-bottom:1px solid var(--rule);cursor:pointer;align-items:baseline}
+  .row.sel,.row:hover{background:#121214}
+  .row .tk{color:var(--faint);font-variant-numeric:tabular-nums;font-size:12px}
+  .row .ty{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+  .row .ty.first{background:var(--hi);color:#000;padding:1px 7px;justify-self:start}
+  .row .ty.converge,.row .ty.contact{color:var(--fg)}
+  .row .ty.dormant{color:var(--ghost)}
+  .row .ct{color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .row .ct .seq{color:var(--fg)}
+  .row .ct .note{color:var(--faint);margin-left:10px}
+  .row.dim .ct,.row.dim .tk{color:var(--faint)}
+
+  /* inline detail */
+  .detail{grid-column:1 / -1;padding:6px 2px 20px 2px;cursor:default;
+    border-top:1px dashed var(--rule2);margin-top:8px;animation:op .25s ease}
+  @keyframes op{from{opacity:0}to{opacity:1}}
+  .detail .dgrid{display:grid;grid-template-columns:260px 1fr;gap:28px;align-items:start}
+  @media(max-width:760px){.detail .dgrid{grid-template-columns:1fr}}
+  .detail h2{font-size:15px;margin:2px 0 2px;font-weight:500}
+  .detail .sub{color:var(--faint);font-size:11px;letter-spacing:.08em;margin-bottom:12px}
+  .detail .lead{color:var(--fg);font-size:13.5px;line-height:1.65;margin:0 0 14px;max-width:640px}
+  .detail canvas{display:block}
+  .detail .ca{width:230px;height:230px;image-rendering:pixelated;border:1px solid var(--rule2);background:#000}
+  .detail .caption{color:var(--faint);font-size:11px;margin-top:8px;max-width:230px;line-height:1.5}
+  .detail .plot{width:100%;height:54px;border:1px solid var(--rule);margin:2px 0 4px;background:#0d0d0f}
+  .detail .fieldlab{color:var(--faint);font-size:10px;letter-spacing:.18em;text-transform:uppercase;
+    margin:16px 0 6px}
+  .detail .seqline{color:var(--fg);word-break:break-word;line-height:1.7;font-size:13px}
+  .detail .kv{color:var(--dim);font-size:12.5px;margin:3px 0}
+  .detail .kv b{color:var(--fg);font-weight:500}
+  .detail .prop{display:inline-block;border:1px solid var(--rule2);color:var(--dim);
+    padding:2px 9px;margin:3px 5px 3px 0;font-size:11.5px}
+  .detail .chip{display:inline-block;border:1px solid var(--rule2);color:var(--fg);
+    padding:3px 9px;margin:3px 5px 3px 0;font-size:12px;cursor:pointer}
+  .detail .chip:hover{border-color:var(--faint)}
+  .detail .genome{color:var(--dim);font-size:12px;white-space:pre-wrap;line-height:1.55;
+    border-left:1px solid var(--rule2);padding:2px 0 2px 14px;margin-top:4px}
+  .detail .play{display:inline-block;border:1px solid var(--rule2);color:var(--fg);
+    padding:5px 12px;margin-top:8px;cursor:pointer;font-size:12px}
+  .detail .play:hover{border-color:var(--faint)}
+
+  /* generic lists (firsts / worlds) */
+  .listhead{color:var(--faint);font-size:11px;letter-spacing:.06em;padding:12px 12px 8px;line-height:1.6}
+  .empty{color:var(--faint);padding:40px 12px;text-align:center}
+
+  footer{flex:0 0 auto;border-top:1px solid var(--rule);color:var(--faint);font-size:11px;
+    padding:9px 0}
+  footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
+  footer .legend span{margin-right:16px}
+  footer b{color:var(--dim);font-weight:400}
 </style>
 </head>
 <body>
-  <canvas id="gl"></canvas>
-  <canvas id="scene"></canvas>
-
-  <div id="topbar">
-    <div class="brand">
-      <span class="mark">&#8756;</span>
-      <span class="word">therefore</span>
-      <span class="crumbs" id="crumbs"></span>
+  <header>
+    <div class="wrap">
+      <div class="titlerow">
+        <div class="logo"><span class="mk">&#8756;</span><span class="nm">therefore</span></div>
+        <div class="whatlink" id="whatlink">what is this?</div>
+      </div>
+      <div class="tagline">an engine that invents number sequences, runs them, and proves which ones are new. it never stops.</div>
+      <div class="explain" id="explain">
+        <b>What you are looking at.</b> THEREFORE invents small mathematical objects (right now, integer
+        sequences), and for each one it <b>actually runs the computation</b>, measures what the sequence does,
+        and checks it against the <b>OEIS</b>, the public catalog of known integer sequences, to find out whether
+        it is genuinely new. Nothing here is a guess from a language model. Every line below is something the
+        engine did and verified.<br><br>
+        <span class="step">the loop, forever:</span>
+        &nbsp;<b>invent</b> a candidate &rarr; <b>run</b> it &rarr; <b>measure</b> what it does &rarr;
+        <b>check</b> if it is new &rarr; <b>keep</b> the good ones &rarr; <b>combine</b> them into bigger ones.<br><br>
+        It also takes each invented function and <b>re-uses it as a cellular-automaton rule</b>, turning the
+        number sequence into a visible black-and-white pattern (open any invention to see it). Several sealed
+        worlds run at once; when two of them invent the same thing on their own, that is flagged as evidence the
+        thing is fundamental.
+      </div>
+      <div class="stats" id="stats"></div>
     </div>
-    <div id="status"></div>
-  </div>
+  </header>
 
-  <div id="stream">
-    <div class="streamhead"><span>discoveries</span>
-      <span class="live"><span class="dot"></span>live</span></div>
-    <div id="feed"></div>
-  </div>
+  <nav>
+    <div class="wrap" style="display:flex;width:100%;max-width:1120px">
+      <div class="tab on" data-view="ledger">live ledger</div>
+      <div class="tab" data-view="firsts">firsts</div>
+      <div class="tab" data-view="worlds">worlds</div>
+      <div class="spacer"></div>
+      <div class="livetag"><span class="d"></span>LIVE</div>
+    </div>
+  </nav>
 
-  <aside id="inspect"><div id="close">&#10005;</div><div id="inspect-body"></div></aside>
+  <main>
+    <div class="wrap">
+      <div class="view on" id="view-ledger">
+        <div class="colhead"><span>tick</span><span>event</span><span>what it did</span></div>
+        <div id="ledger"></div>
+      </div>
+      <div class="view" id="view-firsts">
+        <div class="listhead">Sequences this engine produced that were <b>not found in the OEIS</b>. Each was run, verified, and checked. Click to inspect.</div>
+        <div id="firsts"></div>
+      </div>
+      <div class="view" id="view-worlds">
+        <div class="listhead">Sealed civilizations, each inventing on its own under its own rules. Click to inspect a world's inventions.</div>
+        <div id="worlds"></div>
+      </div>
+    </div>
+  </main>
 
-  <div id="dock">
-    <div class="pill" id="sound">sound off</div>
-    <div class="pill" id="togglestream">hide stream</div>
-  </div>
-  <div id="hint"></div>
-  <div id="tip"></div>
+  <footer><div class="wrap">
+    <div class="legend" id="legend">
+      <span><b>INVENT</b> made a sequence</span>
+      <span><b>FIRST</b> not in OEIS</span>
+      <span><b>EXAPT</b> became a pattern</span>
+      <span><b>CONVERGE</b> found in two worlds</span>
+      <span><b>CONTACT</b> worlds traded</span>
+    </div>
+    <div id="foot-right"></div>
+  </div></footer>
 
-  <script src="organism.js"></script>
-  <script src="sound.js"></script>
   <script src="main.js"></script>
 </body>
 </html>
