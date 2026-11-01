@@ -58,7 +58,8 @@ CREATE TABLE IF NOT EXISTS inventions (
     score         REAL DEFAULT 0,
     novelty       TEXT DEFAULT 'pending',
     exapted       INTEGER DEFAULT 0,
-    exapt_class   TEXT
+    exapt_class   TEXT,
+    domain        TEXT DEFAULT 'number'
 );
 CREATE INDEX IF NOT EXISTS idx_inv_civ   ON inventions(civ_id);
 CREATE INDEX IF NOT EXISTS idx_inv_behav ON inventions(civ_id, behavior_hash);
@@ -149,7 +150,8 @@ class Store:
     def _migrate(self):
         """Add columns that newer versions introduced, for worlds created earlier."""
         existing = {r["name"] for r in self.conn.execute("PRAGMA table_info(inventions)")}
-        for col, ddl in (("exapted", "INTEGER DEFAULT 0"), ("exapt_class", "TEXT")):
+        for col, ddl in (("exapted", "INTEGER DEFAULT 0"), ("exapt_class", "TEXT"),
+                         ("domain", "TEXT DEFAULT 'number'")):
             if col not in existing:
                 try:
                     self.conn.execute(f"ALTER TABLE inventions ADD COLUMN {col} {ddl}")
@@ -161,7 +163,8 @@ class Store:
     def get_unexapted(self, civ_id, limit=4):
         return [dict(r) for r in self.conn.execute(
             "SELECT * FROM inventions WHERE civ_id=? AND status='alive' AND total=1 "
-            "AND COALESCE(exapted,0)=0 ORDER BY wealth DESC LIMIT ?",
+            "AND COALESCE(domain,'number')='number' AND COALESCE(exapted,0)=0 "
+            "ORDER BY wealth DESC LIMIT ?",
             (civ_id, limit)).fetchall()]
 
     def set_exapted(self, inv_id, cls):
@@ -212,10 +215,10 @@ class Store:
             cur = self.conn.execute(
                 "INSERT INTO inventions(civ_id,name,symbol,sig_in_json,sig_out,"
                 "body_json,parents_json,parts_json,origin,created_tick,status,"
-                "wealth,uses,behavior_hash,prefix_json,total,score,novelty) "
+                "wealth,uses,behavior_hash,prefix_json,total,score,novelty,domain) "
                 "VALUES(:civ_id,:name,:symbol,:sig_in_json,:sig_out,:body_json,"
                 ":parents_json,:parts_json,:origin,:created_tick,:status,:wealth,"
-                ":uses,:behavior_hash,:prefix_json,:total,:score,:novelty)", row)
+                ":uses,:behavior_hash,:prefix_json,:total,:score,:novelty,:domain)", row)
             self.conn.commit()
             return cur.lastrowid
 

@@ -17,7 +17,7 @@ import time
 
 from ..vm import type_check
 from ..novelty import check_sequence
-from . import spark, combine, contact, discover as disc, exapt, taste as taste_mod, verify
+from . import spark, combine, contact, discover as disc, domains, exapt, taste as taste_mod, verify
 from .civilization import Civilization, create_civilization
 from .experiment import materialize, record, SEQ_LEN
 from .invention import Invention, behavior_hash
@@ -43,6 +43,10 @@ ERA_LENGTH = 80          # ticks per era
 EXTINCT_EVERY = 3        # every Nth era, a mass extinction
 RETEST_CAP = 160         # how many inventions to retest under the new laws per era
 ENERGY_CHOICES = [0.18, 0.3, 0.5, 1.0, 1.0, 1.6, 2.2]  # scarce .. abundant compute
+
+# cross-domain composition
+CROSS_INTERVAL = 6       # every N ticks a world composes number inventions into figures/melodies
+N_CROSS = 4              # attempts per pass
 
 
 class Engine:
@@ -168,7 +172,7 @@ class Engine:
     def _retest(self, civ, rng):
         """Re-run inventions under the new laws. Some alive ones no longer complete and
         fall dormant; some dormant failures now complete and are resurrected."""
-        members = list(civ.registry.values())
+        members = [i for i in civ.registry.values() if i.domain == "number"]
         dormant = [i for i in members if i.status == "dormant"]
         alive = [i for i in members if i.status == "alive"]
         revived = broke = 0
@@ -255,6 +259,10 @@ class Engine:
         # 4) exaptation: try a few inventions in the foreign (cellular automaton) domain
         self._exapt_pass(civ)
 
+        # 5) cross-domain: compose number inventions into figures and melodies
+        if self.tick % CROSS_INTERVAL == 0:
+            self._compose_domains(civ, rng)
+
     def _exapt_pass(self, civ):
         for row in self.store.get_unexapted(civ.id, limit=3):
             inv = civ.registry.get(row["id"])
@@ -275,6 +283,63 @@ class Engine:
                     "symbol": inv.symbol, "class": cls["class"], "label": cls["label"],
                     "seq": inv.prefix[:8],
                 })
+
+    # -- cross-domain composition --------------------------------------------
+    def _compose_domains(self, civ, rng):
+        sources = civ.alive_total()
+        if len(sources) < 2:
+            return
+        for _ in range(N_CROSS):
+            a, b = rng.sample(sources, 2)
+            if rng.random() < 0.5:
+                self._make_domain(civ, rng, a, b, "figure")
+            else:
+                self._make_domain(civ, rng, a, b, "melody")
+
+    def _make_domain(self, civ, rng, a, b, kind):
+        if kind == "figure":
+            artifact = domains.build_figure(a, b, civ.registry, civ.laws)
+            props, interesting, score = domains.measure_figure(artifact)
+            sig = domains.figure_signature(artifact)
+            body = {"kind": "figure", "turn": a.id, "step": b.id, "n": domains.FIG_N}
+            sig_out, origin = "Figure", "figure"
+        else:
+            artifact = domains.build_melody(a, b, civ.registry, civ.laws)
+            props, interesting, score = domains.measure_melody(artifact)
+            sig = domains.melody_signature(artifact)
+            body = {"kind": "melody", "pitch": a.id, "rhythm": b.id, "n": domains.MEL_N}
+            sig_out, origin = "Melody", "melody"
+        if not interesting:
+            return
+        bh = behavior_hash(sig, True)
+        if self.store.find_behavior(civ.id, bh) is not None:
+            return
+        inv = Invention(
+            id=-(self.tick * 100000 + rng.randint(1, 99999)), civ_id=civ.id,
+            name=f"{origin}#{len(civ.registry) + 1}", symbol=civ.new_symbol(),
+            sig_in=(), sig_out=sig_out, body=body, parents=[a.id, b.id],
+            parts=sorted({a.id, b.id}), origin=origin, created_tick=self.tick,
+            status="alive", wealth=INIT_WEALTH, behavior_hash=bh, prefix=sig,
+            total=True, score=score, novelty="crossdomain", domain=origin)
+        inv.id = self.store.insert_invention(inv.to_row())
+        civ.register(inv)
+        for name, detail in props:
+            self.store.insert_property(inv.id, name, detail, self.tick)
+        self._pay_parts(civ, inv.parts)
+        self.store.add_event(self.tick, civ.id, inv.id, origin, {
+            "symbol": inv.symbol, "parts": inv.parts,
+            "from": [a.symbol, b.symbol], "score": score,
+        })
+
+    def _pay_parts(self, civ, part_ids):
+        for pid in part_ids:
+            if pid in civ.registry:
+                self.store.bump_use_and_wealth(pid, EARN_PER_USE, self.tick)
+                civ.registry[pid].wealth += EARN_PER_USE
+                civ.registry[pid].uses += 1
+                if civ.registry[pid].status == "dormant":
+                    civ.registry[pid].status = "alive"
+                    self.store.update_invention(pid, status="alive")
 
     def _propose(self, civ, rng):
         cands = []

@@ -21,7 +21,7 @@ from urllib.parse import urlparse, parse_qs
 
 from ..store import Store, DB_PATH
 from ..vm import genome as g
-from ..engine import exapt
+from ..engine import exapt, domains
 from ..engine.invention import Invention
 
 UI_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "ui")
@@ -34,22 +34,47 @@ def _store():
     return Store(path=DB_PATH, create=False)
 
 
-def _exaptation_render(st, inv):
-    """Recompute the invention's cellular-automaton exaptation for display.
+def _world_registry(st, civ_id):
+    import json as _json
+    rows = st.load_inventions(civ_id, statuses=["alive", "dormant"])
+    reg = {r["id"]: Invention.from_row(r) for r in rows}
+    civ = next((c for c in st.get_civs() if c["id"] == civ_id), None)
+    laws = _json.loads(civ["laws_json"]) if civ else None
+    return reg, laws
 
-    Loads the civilization's inventions so calls resolve, then evolves the CA whose
-    rule is this invention. Cheap enough to do on a click.
-    """
+
+def _exaptation_render(st, inv, reg, laws):
+    """Recompute the invention's cellular-automaton pattern for display."""
     try:
-        import json as _json
-        rows = st.load_inventions(inv["civ_id"], statuses=["alive", "dormant"])
-        reg = {r["id"]: Invention.from_row(r) for r in rows}
         target = reg.get(inv["id"]) or Invention.from_row(inv)
-        civ = next((c for c in st.get_civs() if c["id"] == inv["civ_id"]), None)
-        laws = _json.loads(civ["laws_json"]) if civ else None
         sp = exapt.spacetime(target, reg, laws, states=4, width=81, steps=81)
-        cls = exapt.classify(sp)
-        return {"states": sp["states"], "rows": sp["rows"], **cls}
+        return {"states": sp["states"], "rows": sp["rows"], **exapt.classify(sp)}
+    except Exception:
+        return None
+
+
+def _figure_render(reg, laws, body):
+    t = reg.get(body.get("turn")); s = reg.get(body.get("step"))
+    if not t or not s:
+        return None
+    try:
+        pts = domains.build_figure(t, s, reg, laws, n=body.get("n", domains.FIG_N))
+        return {"points": pts,
+                "turn": {"id": t.id, "symbol": t.symbol},
+                "step": {"id": s.id, "symbol": s.symbol}}
+    except Exception:
+        return None
+
+
+def _melody_render(reg, laws, body):
+    p = reg.get(body.get("pitch")); r = reg.get(body.get("rhythm"))
+    if not p or not r:
+        return None
+    try:
+        notes = domains.build_melody(p, r, reg, laws, n=body.get("n", domains.MEL_N))
+        return {"notes": notes,
+                "pitch": {"id": p.id, "symbol": p.symbol},
+                "rhythm": {"id": r.id, "symbol": r.symbol}}
     except Exception:
         return None
 
@@ -79,22 +104,31 @@ def _invention_detail(st, inv_id):
         return {"id": iid, "symbol": r["symbol"], "name": r["name"],
                 "prefix": json.loads(r["prefix_json"] or "[]")[:8]} if r else {"id": iid}
 
-    return {
+    domain = (inv["domain"] if "domain" in inv.keys() else "number") or "number"
+    body = json.loads(inv["body_json"])
+    out = {
         "id": inv["id"], "civ_id": inv["civ_id"], "symbol": inv["symbol"],
         "name": inv["name"], "origin": inv["origin"], "status": inv["status"],
         "created_tick": inv["created_tick"], "wealth": round(inv["wealth"], 2),
         "uses": inv["uses"], "total": bool(inv["total"]), "score": inv["score"],
-        "novelty_status": inv["novelty"],
+        "novelty_status": inv["novelty"], "domain": domain,
         "sig": [json.loads(inv["sig_in_json"]), inv["sig_out"]],
         "prefix": json.loads(inv["prefix_json"] or "[]"),
-        "genome": json.loads(inv["body_json"]),
-        "genome_size": g.size(json.loads(inv["body_json"])),
-        "uses_self": g.uses_self(json.loads(inv["body_json"])),
         "properties": props, "experiments": exps, "novelty": novelty,
         "parents": [brief(i) for i in parents],
         "parts": [brief(i) for i in parts],
-        "exaptation": _exaptation_render(st, inv),
     }
+    if domain == "number":
+        reg, laws = _world_registry(st, inv["civ_id"])
+        out["genome"] = body
+        out["genome_size"] = g.size(body)
+        out["uses_self"] = g.uses_self(body)
+        out["exaptation"] = _exaptation_render(st, inv, reg, laws)
+    elif domain in ("figure", "melody"):
+        reg, laws = _world_registry(st, inv["civ_id"])
+        out["spec"] = body
+        out[domain] = _figure_render(reg, laws, body) if domain == "figure" else _melody_render(reg, laws, body)
+    return out
 
 
 def _civ_detail(st, civ_id):
@@ -108,6 +142,7 @@ def _civ_detail(st, civ_id):
             "total": bool(r["total"]), "score": r["score"],
             "novelty": r["novelty"], "prefix": json.loads(r["prefix_json"] or "[]")[:12],
             "parts": json.loads(r["parts_json"] or "[]"),
+            "domain": (r["domain"] if "domain" in r.keys() else "number") or "number",
         })
     civ = next((c for c in st.get_civs() if c["id"] == civ_id), None)
     return {"civ": {"id": civ["id"], "name": civ["name"], "glyph": civ["glyph"],

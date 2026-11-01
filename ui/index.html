@@ -70,7 +70,8 @@
   .row .ty{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
   .row .ty.first{background:var(--hi);color:#000;padding:1px 7px;justify-self:start}
   .row .ty.extinct{background:#2a2a2e;color:var(--fg);padding:1px 7px;justify-self:start}
-  .row .ty.converge,.row .ty.contact,.row .ty.era,.row .ty.revive,.row .ty.taste{color:var(--fg)}
+  .row .ty.converge,.row .ty.contact,.row .ty.era,.row .ty.revive,.row .ty.taste,
+  .row .ty.figure,.row .ty.melody{color:var(--fg)}
   .row .ty.dormant{color:var(--ghost)}
   .row .ct{color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .row .ct .seq{color:var(--fg)}
@@ -88,6 +89,11 @@
   .detail .lead{color:var(--fg);font-size:13.5px;line-height:1.65;margin:0 0 14px;max-width:640px}
   .detail canvas{display:block}
   .detail .ca{width:230px;height:230px;image-rendering:pixelated;border:1px solid var(--rule2);background:#000}
+  .detail .fig{width:250px;height:250px;image-rendering:auto}
+  .detail .roll{width:100%;max-width:260px;height:160px;image-rendering:auto}
+  .detail .play{display:inline-block;border:1px solid var(--rule2);color:var(--fg);
+    padding:6px 13px;margin-top:10px;cursor:pointer;font-size:12px;user-select:none}
+  .detail .play:hover{border-color:var(--faint)}
   .detail .caption{color:var(--faint);font-size:11px;margin-top:8px;max-width:230px;line-height:1.5}
   .detail .plot{width:100%;height:54px;border:1px solid var(--rule);margin:2px 0 4px;background:#0d0d0f}
   .detail .fieldlab{color:var(--faint);font-size:10px;letter-spacing:.18em;text-transform:uppercase;
@@ -138,6 +144,11 @@
         number sequence into a visible black-and-white pattern (open any invention to see it). Several sealed
         worlds run at once; when two of them invent the same thing on their own, that is flagged as evidence the
         thing is fundamental.<br><br>
+        <b>Inventions cross domains.</b> The engine also takes the number sequences it invents and composes them
+        into things in other domains: two sequences become a <b>figure</b> (a turtle turns by one and steps by the
+        other, drawing a shape), or a <b>melody</b> (one picks each note's pitch, the other its length). The number
+        inventions become the real parts of these, so the same idea can live as a number, a pattern, a drawing, or a
+        sound.<br><br>
         <b>The rules are not fixed.</b> Each world passes through <b>eras</b>, and when an era turns, its laws change:
         operations get more or less expensive, and compute becomes scarce or abundant. Inventions that no longer
         run fall dormant, old failures that suddenly work are <b>resurrected</b>, and now and then a <b>mass

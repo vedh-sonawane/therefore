@@ -48,6 +48,8 @@ const EVENTS = {
   extinction:    { tag: 'EXTINCT',  cls: 'extinct' },
   resurrection:  { tag: 'REVIVE',   cls: 'revive' },
   taste:         { tag: 'TASTE',    cls: 'taste' },
+  figure:        { tag: 'FIGURE',   cls: 'figure' },
+  melody:        { tag: 'MELODY',   cls: 'melody' },
   genesis:       { tag: 'WORLD',    cls: 'world' },
   birth:         { tag: 'INVENT',   cls: 'invent' },
 };
@@ -86,6 +88,10 @@ function lineFor(e) {
       return p.kind === 'revolution'
         ? { text: `${p.glyph} undergoes a taste revolution`, note: `now prizes ${VIRTUE[p.to] || p.to}` }
         : { text: `${p.glyph} changes what it values`, note: `from ${VIRTUE[p.from] || p.from} to ${VIRTUE[p.to] || p.to}` };
+    case 'figure':
+      return { inv: e.inv_id, text: `a figure drawn from ${(p.from || []).join(' and ')}`, note: 'two sequences became a shape' };
+    case 'melody':
+      return { inv: e.inv_id, text: `a melody from ${(p.from || []).join(' and ')}`, note: 'two sequences became a tune' };
     case 'genesis':
       return { text: `${p.glyph || ''} ${p.name} begins`, note: 'a new world' };
     default: return null;
@@ -155,9 +161,30 @@ async function toggleDetail(row, invId) {
 async function renderDetail(invId, host) {
   let d; try { d = await getJSON('/api/invention/' + invId); } catch (x) { host.innerHTML = '<div class="kv">could not load</div>'; return; }
   if (!d || d.error) { host.innerHTML = '<div class="kv">not found</div>'; return; }
+  if (d.domain === 'figure') renderFigure(d, host);
+  else if (d.domain === 'melody') renderMelody(d, host);
+  else renderNumber(d, host);
+  wireChips(host);
+}
+
+function lineageHTML(arr, lab) {
+  return arr && arr.length
+    ? `<div class="fieldlab">${lab}</div>` + arr.map(p => `<span class="chip" data-inv="${p.id}">${p.symbol || '?'}${p.prefix ? '  ' + p.prefix.slice(0, 5).join(' ') : ''}</span>`).join('') : '';
+}
+function wireChips(host) {
+  host.querySelectorAll('[data-inv]').forEach(c => c.addEventListener('click', () => {
+    document.querySelectorAll('.detail').forEach(x => x.remove());
+    openStandaloneDetail(+c.dataset.inv);
+  }));
+}
+function standingHTML(d) {
+  return `<div class="fieldlab">standing</div>` +
+    `<div class="kv">wealth <b>${d.wealth}</b> &nbsp; reused as a part <b>${d.uses}x</b> &nbsp; status <b>${d.status}</b></div>`;
+}
+
+function renderNumber(d, host) {
   const ex = d.exaptation, nv = d.novelty, exp = d.experiments[0];
   const props = d.properties.filter(p => p.name !== 'exaptation');
-
   let novHtml = '';
   if (nv && nv.status === 'first')
     novHtml = `<div class="kv"><b>not found in the OEIS.</b> as far as that public catalog knows, this sequence is new.` +
@@ -165,10 +192,6 @@ async function renderDetail(invId, host) {
   else if (nv && nv.status === 'known' && nv.matches.length)
     novHtml = `<div class="kv">recognised as <b>${nv.matches[0].id}</b> ${nv.matches[0].name} <a href="https://oeis.org/${nv.matches[0].id}" target="_blank">(OEIS)</a></div>`;
   else novHtml = `<div class="kv">novelty: ${nv ? nv.status : 'n/a'}</div>`;
-
-  const lineage = (arr, lab) => arr && arr.length
-    ? `<div class="fieldlab">${lab}</div>` + arr.map(p => `<span class="chip" data-inv="${p.id}">${p.symbol || '?'}${p.prefix ? '  ' + p.prefix.slice(0, 5).join(' ') : ''}</span>`).join('') : '';
-
   host.innerHTML =
     `<div class="dgrid"><div>
        <canvas class="ca" width="81" height="81"></canvas>
@@ -176,7 +199,7 @@ async function renderDetail(invId, host) {
      </div>
      <div>
        <h2>${d.symbol} <span style="color:#56565d;font-weight:400">#${d.id}</span></h2>
-       <div class="sub">${d.origin} &middot; ${d.total ? 'runs to completion' : 'partial'} &middot; invented at tick ${d.created_tick}</div>
+       <div class="sub">number &middot; ${d.origin} &middot; invented at tick ${d.created_tick}</div>
        <p class="lead">${describe(d)}</p>
        ${novHtml}
        <div class="fieldlab">the sequence it produces</div>
@@ -186,20 +209,65 @@ async function renderDetail(invId, host) {
        ${props.length ? props.map(p => `<span class="prop">${p.name}${fmtDetail(p.detail)}</span>`).join('') : '<span style="color:#56565d">none detected</span>'}
        <div class="fieldlab">proof it ran</div>
        ${exp ? `<div class="kv">ran for inputs n=${exp.input.n ? exp.input.n.join(' to ') : '?'}; ${exp.ok ? 'completed' : 'stopped, ' + exp.error}; used <b>${exp.ops}</b> computation steps</div>` : ''}
-       <div class="fieldlab">standing</div>
-       <div class="kv">wealth <b>${d.wealth}</b> &nbsp; reused as a part <b>${d.uses}x</b> &nbsp; status <b>${d.status}</b></div>
-       ${lineage(d.parents, 'descended from')}
-       ${lineage(d.parts, 'built from')}
+       ${standingHTML(d)}
+       ${lineageHTML(d.parents, 'descended from')}
+       ${lineageHTML(d.parts, 'built from')}
        <div class="fieldlab">the invention itself (its genome)</div>
        <div class="genome">f(n) = ${prettyGenome(d.genome)}</div>
      </div></div>`;
-
   if (ex && ex.rows) drawCA(host.querySelector('.ca'), ex.rows);
   plotSeq(host.querySelector('.plot'), d.prefix);
-  host.querySelectorAll('[data-inv]').forEach(c => c.addEventListener('click', () => {
-    document.querySelectorAll('.detail').forEach(x => x.remove());
-    openStandaloneDetail(+c.dataset.inv);
-  }));
+}
+
+function renderFigure(d, host) {
+  const f = d.figure, props = d.properties;
+  const src = f ? `<span class="chip" data-inv="${f.turn.id}">${f.turn.symbol}</span> sets how it turns, ` +
+                  `<span class="chip" data-inv="${f.step.id}">${f.step.symbol}</span> sets how far it steps` : '';
+  host.innerHTML =
+    `<div class="dgrid"><div>
+       <canvas class="ca fig" width="330" height="330"></canvas>
+       <div class="caption">a turtle walks this path: at each step it turns by one sequence and moves by another. a shape made of two number sequences.</div>
+     </div>
+     <div>
+       <h2>${d.symbol} <span style="color:#56565d;font-weight:400">#${d.id}</span></h2>
+       <div class="sub">figure &middot; a cross-domain invention &middot; tick ${d.created_tick}</div>
+       <p class="lead">${describe(d)}</p>
+       <div class="fieldlab">drawn from two number inventions</div>
+       <div class="kv">${src}</div>
+       <div class="fieldlab">measured properties</div>
+       ${props.length ? props.map(p => `<span class="prop">${p.name}${fmtDetail(p.detail)}</span>`).join('') : '<span style="color:#56565d">none</span>'}
+       ${standingHTML(d)}
+       ${lineageHTML(d.parts, 'its parts')}
+     </div></div>`;
+  if (f && f.points) drawFigure(host.querySelector('.fig'), f.points);
+}
+
+function renderMelody(d, host) {
+  const m = d.melody, props = d.properties;
+  const src = m ? `<span class="chip" data-inv="${m.pitch.id}">${m.pitch.symbol}</span> chooses each pitch, ` +
+                  `<span class="chip" data-inv="${m.rhythm.id}">${m.rhythm.symbol}</span> chooses each length` : '';
+  host.innerHTML =
+    `<div class="dgrid"><div>
+       <canvas class="ca roll" width="330" height="200"></canvas>
+       <div class="caption">a piano roll: time runs left to right, pitch runs bottom to top. press play to hear it.</div>
+       <div class="play" id="play-${d.id}">play this melody</div>
+     </div>
+     <div>
+       <h2>${d.symbol} <span style="color:#56565d;font-weight:400">#${d.id}</span></h2>
+       <div class="sub">melody &middot; a cross-domain invention &middot; tick ${d.created_tick}</div>
+       <p class="lead">${describe(d)}</p>
+       <div class="fieldlab">composed from two number inventions</div>
+       <div class="kv">${src}</div>
+       <div class="fieldlab">measured properties</div>
+       ${props.length ? props.map(p => `<span class="prop">${p.name}${fmtDetail(p.detail)}</span>`).join('') : '<span style="color:#56565d">none</span>'}
+       ${standingHTML(d)}
+       ${lineageHTML(d.parts, 'its parts')}
+     </div></div>`;
+  if (m && m.notes) {
+    drawPianoRoll(host.querySelector('.roll'), m.notes);
+    const btn = host.querySelector('#play-' + d.id);
+    if (btn) btn.addEventListener('click', () => { playMelody(m.notes); btn.textContent = 'playing...'; setTimeout(() => btn.textContent = 'play this melody', 300 + m.notes.length * 150); });
+  }
 }
 
 // when inspecting a lineage chip there may be no row to attach to; open at top of ledger
@@ -215,6 +283,56 @@ function drawCA(cv, rows) {
   const g = cv.getContext('2d'), H = rows.length, W = rows[0].length;
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     g.fillStyle = CA_GRAY[((rows[y][x] % 4) + 4) % 4]; g.fillRect(x, y, 1, 1);
+  }
+}
+
+function drawFigure(cv, pts) {
+  const g = cv.getContext('2d'); g.fillStyle = '#000'; g.fillRect(0, 0, cv.width, cv.height);
+  if (pts.length < 2) return;
+  const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+  const minx = Math.min(...xs), maxx = Math.max(...xs), miny = Math.min(...ys), maxy = Math.max(...ys);
+  const pad = 16, w = cv.width - pad * 2, h = cv.height - pad * 2;
+  const sc = Math.min(w / (maxx - minx || 1), h / (maxy - miny || 1));
+  const ox = pad + (w - (maxx - minx) * sc) / 2, oy = pad + (h - (maxy - miny) * sc) / 2;
+  const X = x => ox + (x - minx) * sc, Y = y => cv.height - (oy + (y - miny) * sc);
+  g.strokeStyle = '#e9e9ec'; g.lineWidth = 1.2; g.lineJoin = 'round'; g.beginPath();
+  pts.forEach((p, i) => { i ? g.lineTo(X(p[0]), Y(p[1])) : g.moveTo(X(p[0]), Y(p[1])); });
+  g.stroke();
+  g.fillStyle = '#ffce6a'; g.fillRect(X(pts[0][0]) - 2, Y(pts[0][1]) - 2, 4, 4);
+}
+
+function drawPianoRoll(cv, notes) {
+  const g = cv.getContext('2d'); g.fillStyle = '#000'; g.fillRect(0, 0, cv.width, cv.height);
+  if (!notes.length) return;
+  const pitches = notes.map(n => n[0]);
+  const lo = Math.min(...pitches), hi = Math.max(...pitches), span = (hi - lo) || 1;
+  const totalBeats = notes.reduce((s, n) => s + n[1], 0);
+  const bw = cv.width / totalBeats, rh = Math.max(3, cv.height / (span + 2));
+  let x = 0;
+  g.fillStyle = '#e9e9ec';
+  for (const [midi, dur] of notes) {
+    const y = cv.height - ((midi - lo + 1) / (span + 2)) * cv.height;
+    g.fillRect(x + 1, y, Math.max(2, bw * dur - 2), rh);
+    x += bw * dur;
+  }
+}
+
+// explicit, click-only audio: you hear the actual melody the engine invented
+let _actx = null;
+function playMelody(notes) {
+  if (!_actx) { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return; _actx = new AC(); }
+  if (_actx.state === 'suspended') _actx.resume();
+  const master = _actx.createGain(); master.gain.value = 0.22;
+  const lp = _actx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 4200;
+  master.connect(lp); lp.connect(_actx.destination);
+  let t = _actx.currentTime + 0.05; const beat = 0.15;
+  for (const [midi, dur] of notes) {
+    const f = 440 * Math.pow(2, (midi - 69) / 12), len = beat * dur;
+    const o = _actx.createOscillator(); o.type = 'triangle'; o.frequency.value = f;
+    const gain = _actx.createGain();
+    gain.gain.setValueAtTime(0, t); gain.gain.linearRampToValueAtTime(0.3, t + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + len * 0.95);
+    o.connect(gain); gain.connect(master); o.start(t); o.stop(t + len); t += len;
   }
 }
 function plotSeq(c, seq) {
@@ -284,6 +402,26 @@ async function toggleWorld(row, civId) {
 // ---------- language helpers ----------
 function describe(d) {
   const props = {}; d.properties.forEach(p => props[p.name] = p.detail);
+  if (d.domain === 'figure') {
+    const bits = [];
+    if (props['closed']) bits.push('it closes back on itself');
+    if (props['space-filling']) bits.push('it fills space densely');
+    if (props['balanced']) bits.push('it is roughly square in proportion');
+    let s = 'A figure drawn by a turtle, where one number sequence decides how much it turns at each step and another decides how far it moves.';
+    if (bits.length) s += ' ' + bits.join(', ') + '.';
+    s += ' It is a shape invented purely by combining two sequences, a use neither was built for.';
+    return s;
+  }
+  if (d.domain === 'melody') {
+    const bits = [];
+    if (props['pitch-range']) bits.push(`it spans ${props['pitch-range'].semitones} semitones`);
+    if (props['rhythmic']) bits.push('it has real rhythmic variety');
+    if (props['repeating-motif']) bits.push(`a short motif repeats every ${props['repeating-motif'].period} notes`);
+    let s = 'A melody where one number sequence chooses the pitch of each note and another chooses its length, snapped to a major scale so it stays consonant.';
+    if (bits.length) s += ' ' + bits.join(', ') + '.';
+    s += ' Press play to hear what two sequences sound like together.';
+    return s;
+  }
   if (d.novelty && d.novelty.status === 'known' && d.novelty.matches.length)
     return `This is a known sequence: ${d.novelty.matches[0].name} (OEIS ${d.novelty.matches[0].id}).`;
   let noun = 'integer sequence';

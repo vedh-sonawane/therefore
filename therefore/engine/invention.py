@@ -30,6 +30,7 @@ class Invention:
     total: bool = False
     score: float = 0.0
     novelty: str = "pending"
+    domain: str = "number"   # number | figure | melody
 
     # ---- VM protocol: the interpreter only needs id/body/sig_in/sig_out ----
 
@@ -46,6 +47,7 @@ class Invention:
             "behavior_hash": self.behavior_hash,
             "prefix_json": json.dumps(self.prefix),
             "total": int(self.total), "score": self.score, "novelty": self.novelty,
+            "domain": self.domain,
         }
 
     @staticmethod
@@ -60,7 +62,8 @@ class Invention:
             origin=r["origin"], created_tick=r["created_tick"], status=r["status"],
             wealth=r["wealth"], uses=r["uses"], behavior_hash=r["behavior_hash"],
             prefix=json.loads(r["prefix_json"] or "[]"),
-            total=bool(r["total"]), score=r["score"], novelty=r["novelty"])
+            total=bool(r["total"]), score=r["score"], novelty=r["novelty"],
+            domain=(r["domain"] if "domain" in r.keys() else "number") or "number")
 
 
 def behavior_hash(prefix, total):

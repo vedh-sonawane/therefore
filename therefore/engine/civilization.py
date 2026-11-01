@@ -31,12 +31,14 @@ class Civilization:
         self.ordinal = max(self.ordinal, inv.id)
 
     def callables(self):
-        """Ids of alive, total inventions - the parts spark/combine may build on."""
+        """Ids of alive, total number inventions - the parts spark/combine build on."""
         return [i.id for i in self.registry.values()
-                if i.status == "alive" and i.total]
+                if i.status == "alive" and i.total and i.domain == "number"]
 
     def alive_total(self):
-        return [i for i in self.registry.values() if i.status == "alive" and i.total]
+        """Alive, total number inventions (the number-domain working set)."""
+        return [i for i in self.registry.values()
+                if i.status == "alive" and i.total and i.domain == "number"]
 
     # -- naming --------------------------------------------------------------
     def new_symbol(self):
