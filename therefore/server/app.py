@@ -21,7 +21,7 @@ from urllib.parse import urlparse, parse_qs
 
 from ..store import Store, DB_PATH
 from ..vm import genome as g
-from ..engine import exapt, domains, sortnet
+from ..engine import exapt, domains, sortnet, magic, automaton, strategy, circuit
 from ..engine.invention import Invention
 
 UI_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "ui")
@@ -136,6 +136,29 @@ def _invention_detail(st, inv_id):
             "valid": sortnet.is_valid(comps, n), "inputs": 1 << n,
             "best_known": sortnet.KNOWN_OPT.get(n),
         }
+    elif domain == "magic":
+        n = body.get("n"); sq = body.get("square", [])
+        out["magic"] = {"n": n, "square": sq, "sum": magic.magic_sum(n),
+                        "valid": magic.is_magic(sq, n)}
+    elif domain == "automaton":
+        table = body.get("table", []); states = body.get("states", 3)
+        st = automaton.spacetime(table, states)
+        out["automaton"] = {"states": states, "table": table, "rows": st["rows"],
+                            **exapt.classify(st)}
+    elif domain == "strategy":
+        pol = body.get("policy", [])
+        w = strategy.wins(pol) if pol else 0
+        out["strategy"] = {"k": body.get("k"), "maxpile": body.get("maxpile"),
+                           "policy": pol, "wins": w,
+                           "winnable": strategy.winnable_count(),
+                           "optimal": w >= strategy.winnable_count()}
+    elif domain == "circuit":
+        n = body.get("n"); gates = body.get("gates", []); name = body.get("target")
+        gt = [tuple(g) for g in gates]
+        valid = circuit.truth_vector(gt, n) == circuit.target_vector(name, n)
+        out["circuit"] = {"n": n, "target": name, "gates": gates,
+                          "used": circuit.reachable(gt, n), "valid": valid,
+                          "inputs": 1 << n}
     return out
 
 

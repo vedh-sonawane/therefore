@@ -17,7 +17,8 @@ import time
 
 from ..vm import type_check, run
 from ..novelty import check_sequence
-from . import spark, combine, contact, discover as disc, domains, exapt, sortnet, taste as taste_mod, verify
+from . import (spark, combine, contact, discover as disc, domains, exapt, sortnet,
+               magic, automaton, strategy, circuit, taste as taste_mod, verify)
 from .civilization import Civilization, create_civilization
 from .experiment import materialize, record, SEQ_LEN
 from .invention import Invention, behavior_hash
@@ -63,6 +64,15 @@ ADOPT_INTERVAL = 55      # ticks between adopting an invented function into an o
 SORTNET_INTERVAL = 4
 SORTNET_NS = [4, 5, 6, 7, 8, 9, 10]
 
+# further discovery domains: math, science, game theory, logic
+MAGIC_INTERVAL = 5
+MAGIC_NS = [3, 4]
+AUTOMATON_INTERVAL = 5
+STRATEGY_INTERVAL = 7
+CIRCUIT_INTERVAL = 6
+CIRCUIT_NS = [3, 4]
+CIRCUIT_TARGETS = list(circuit.TARGETS.keys())
+
 
 class Engine:
     def __init__(self, store, n_civs=1):
@@ -75,13 +85,30 @@ class Engine:
         self.civ_by_id = {c.id: c for c in self.civs}
         self.organs = json.loads(store.get_meta("organs", "{}") or "{}")
         self.sortnet_best = {}
+        self.magic_done = set()
+        self.circuit_best = {}
+        self.strategy_best = {}
         for civ in self.civs:
             for inv in civ.registry.values():
-                if inv.domain == "sortnet" and isinstance(inv.body, dict):
-                    n = inv.body.get("n"); comps = inv.body.get("comparators", [])
+                b = inv.body if isinstance(inv.body, dict) else {}
+                if inv.domain == "sortnet":
+                    n = b.get("n"); comps = b.get("comparators", [])
                     key = (civ.id, n); cur = self.sortnet_best.get(key)
                     if cur is None or len(comps) < cur[0]:
                         self.sortnet_best[key] = (len(comps), comps, inv.id)
+                elif inv.domain == "magic":
+                    self.magic_done.add((civ.id, b.get("n")))
+                elif inv.domain == "circuit":
+                    key = (civ.id, b.get("target"), b.get("n"))
+                    g = circuit.reachable([tuple(x) for x in b.get("gates", [])], b.get("n", 0))
+                    if key not in self.circuit_best or g < self.circuit_best[key]:
+                        self.circuit_best[key] = g
+                elif inv.domain == "strategy":
+                    pol = b.get("policy", [])
+                    w = strategy.wins(pol) if pol else 0
+                    cur = self.strategy_best.get(civ.id)
+                    if cur is None or w > cur[0]:
+                        self.strategy_best[civ.id] = (w, pol)
 
     # -- world setup / resume ------------------------------------------------
     def _load_or_create(self):
@@ -332,9 +359,17 @@ class Engine:
         if self.tick % CROSS_INTERVAL == 0:
             self._compose_domains(civ, rng)
 
-        # 6) discovery: invent and shrink a provably-correct sorting network
+        # 6) discovery across many fields, each verified in its own way
         if self.tick % SORTNET_INTERVAL == 0:
             self._sortnet_pass(civ, rng)
+        if self.tick % MAGIC_INTERVAL == 0:
+            self._magic_pass(civ, rng)
+        if self.tick % AUTOMATON_INTERVAL == 0:
+            self._automaton_pass(civ, rng)
+        if self.tick % STRATEGY_INTERVAL == 0:
+            self._strategy_pass(civ, rng)
+        if self.tick % CIRCUIT_INTERVAL == 0:
+            self._circuit_pass(civ, rng)
 
     def _exapt_pass(self, civ):
         for row in self.store.get_unexapted(civ.id, limit=3):
@@ -393,6 +428,94 @@ class Engine:
             "symbol": inv.symbol, "n": n, "comparators": count,
             "best_known": best_known, "depth": sortnet.depth(net, n), "novelty": novelty,
         })
+
+    def _register_domain(self, civ, origin, domain, sig_out, body, prefix, score,
+                         novelty, props, event_type, payload, parents=None, parts=None):
+        inv = Invention(
+            id=-(self.tick * 100000 + rng_tempid(self.tick, origin)), civ_id=civ.id,
+            name=f"{origin}#{len(civ.registry) + 1}", symbol=civ.new_symbol(),
+            sig_in=(), sig_out=sig_out, body=body, parents=parents or [], parts=parts or [],
+            origin=origin, created_tick=self.tick, status="alive", wealth=INIT_WEALTH,
+            behavior_hash=behavior_hash(prefix, True), prefix=prefix, total=True,
+            score=float(score), novelty=novelty, domain=domain)
+        inv.id = self.store.insert_invention(inv.to_row())
+        civ.register(inv)
+        for name, detail in (props or []):
+            self.store.insert_property(inv.id, name, detail, self.tick)
+        payload = dict(payload); payload["symbol"] = inv.symbol
+        self.store.add_event(self.tick, civ.id, inv.id, event_type, payload)
+        return inv
+
+    # -- discovery: mathematics (magic squares) ------------------------------
+    def _magic_pass(self, civ, rng):
+        n = MAGIC_NS[(self.tick // MAGIC_INTERVAL) % len(MAGIC_NS)]
+        if (civ.id, n) in self.magic_done:
+            return
+        sq, d = magic.improve(magic.random_square(n, rng), n, rng, tries=4000)
+        if d != 0:
+            return
+        self.magic_done.add((civ.id, n))
+        self._register_domain(
+            civ, "magic-square", "magic", "Magic", {"kind": "magic", "n": n, "square": sq},
+            prefix=[n, magic.magic_sum(n)], score=n * n, novelty="verified",
+            props=[("line-sum", {"value": magic.magic_sum(n)})],
+            event_type="magic", payload={"n": n, "sum": magic.magic_sum(n)})
+
+    # -- discovery: science (cellular automata) ------------------------------
+    def _automaton_pass(self, civ, rng):
+        table = automaton.random_rule(3, rng)
+        st, cls = automaton.evaluate(table, 3)
+        if cls["class"] not in ("III", "IV"):
+            return
+        sig = automaton.rule_signature(table, 3)
+        if self.store.find_behavior(civ.id, behavior_hash(sig, True)) is not None:
+            return
+        self._register_domain(
+            civ, "automaton", "automaton", "Automaton",
+            {"kind": "automaton", "states": 3, "table": table},
+            prefix=sig, score={"IV": 5, "III": 4}[cls["class"]], novelty="emergent",
+            props=[("behaviour", cls)],
+            event_type="automaton", payload={"class": cls["class"], "label": cls["label"]})
+
+    # -- discovery: game theory (winning strategies) -------------------------
+    def _strategy_pass(self, civ, rng):
+        winnable = strategy.winnable_count()
+        cur = self.strategy_best.get(civ.id)
+        if cur is None:
+            policy, w = strategy.improve(strategy.random_policy(rng), rng, tries=120)
+        else:
+            policy, w = strategy.improve(list(cur[1]), rng, tries=160)
+        if cur is not None and w <= cur[0]:
+            return
+        self.strategy_best[civ.id] = (w, policy)
+        self._register_domain(
+            civ, "strategy", "strategy", "Strategy",
+            {"kind": "strategy", "k": strategy.K, "maxpile": strategy.MAXPILE, "policy": policy},
+            prefix=["strat", w] + policy, score=float(w),
+            novelty="optimal" if w >= winnable else "partial",
+            props=[("plays", {"wins": w, "winnable": winnable})],
+            event_type="strategy",
+            payload={"wins": w, "winnable": winnable, "optimal": w >= winnable})
+
+    # -- discovery: logic (boolean circuits) ---------------------------------
+    def _circuit_pass(self, civ, rng):
+        name = CIRCUIT_TARGETS[(self.tick // CIRCUIT_INTERVAL) % len(CIRCUIT_TARGETS)]
+        n = CIRCUIT_NS[(self.tick // CIRCUIT_INTERVAL // len(CIRCUIT_TARGETS)) % len(CIRCUIT_NS)]
+        gates, fit = circuit.search(name, n, rng)
+        if fit < 1.0:
+            return
+        used = circuit.reachable([tuple(g) for g in gates], n)
+        key = (civ.id, name, n)
+        if key in self.circuit_best and used >= self.circuit_best[key]:
+            return
+        self.circuit_best[key] = used
+        self._register_domain(
+            civ, "circuit", "circuit", "Circuit",
+            {"kind": "circuit", "n": n, "target": name, "gates": gates},
+            prefix=[n, used], score=float(-used), novelty="verified",
+            props=[("computes", {"function": name, "gates": used})],
+            event_type="circuit",
+            payload={"target": name, "n": n, "gates": used, "inputs": 1 << n})
 
     # -- cross-domain composition --------------------------------------------
     def _compose_domains(self, civ, rng):
@@ -610,6 +733,10 @@ class Engine:
                     "seq": prefix[:8], "also_in": len(others),
                     "note": "independently invented in another world",
                 })
+
+
+def rng_tempid(tick, origin):
+    return 80000 + sum(ord(ch) for ch in origin) * 7 + (tick % 101)
 
 
 def _ref_parts(body):

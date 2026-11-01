@@ -51,6 +51,10 @@ const EVENTS = {
   figure:        { tag: 'FIGURE',   cls: 'figure' },
   melody:        { tag: 'MELODY',   cls: 'melody' },
   algorithm:     { tag: 'ALGORITHM', cls: 'algorithm' },
+  magic:         { tag: 'MATH',     cls: 'magic' },
+  automaton:     { tag: 'SCIENCE',  cls: 'automaton' },
+  strategy:      { tag: 'STRATEGY', cls: 'strategy' },
+  circuit:       { tag: 'LOGIC',    cls: 'circuit' },
   ouroboros:     { tag: 'OUROBOROS', cls: 'ouroboros' },
   genesis:       { tag: 'WORLD',    cls: 'world' },
   birth:         { tag: 'INVENT',   cls: 'invent' },
@@ -99,6 +103,14 @@ function lineFor(e) {
       const tag = p.novelty === 'beats-known' ? ' (beats the best known!)' : p.novelty === 'optimal' ? ' (matches the known optimum)' : '';
       return { inv: e.inv_id, text: `a sorting network for ${p.n} wires using ${p.comparators} comparators${tag}`, note: `provably sorts every input${bk}` };
     }
+    case 'magic':
+      return { inv: e.inv_id, text: `a ${p.n} by ${p.n} magic square, every line sums to ${p.sum}`, note: 'verified exactly' };
+    case 'automaton':
+      return { inv: e.inv_id, text: `a cellular automaton with ${p.label} behaviour`, note: `a rule invented for its own complexity (class ${p.class})` };
+    case 'strategy':
+      return { inv: e.inv_id, text: `a strategy winning ${p.wins} of ${p.winnable} winnable positions${p.optimal ? ', provably optimal' : ''}`, note: 'the subtraction game, checked by playing every game out' };
+    case 'circuit':
+      return { inv: e.inv_id, text: `a logic circuit computing ${p.target} of ${p.n} inputs with ${p.gates} gates`, note: `verified on all ${p.inputs} inputs` };
     case 'ouroboros':
       return { inv: e.inv_id, text: `the engine ${p.verb || 'adopts'} ${p.symbol} to run ${p.role}`, note: `${p.pct}% of its machinery is now self-written` };
     case 'genesis':
@@ -173,6 +185,10 @@ async function renderDetail(invId, host) {
   if (d.domain === 'figure') renderFigure(d, host);
   else if (d.domain === 'melody') renderMelody(d, host);
   else if (d.domain === 'sortnet') renderSortnet(d, host);
+  else if (d.domain === 'magic') renderMagic(d, host);
+  else if (d.domain === 'automaton') renderAutomaton(d, host);
+  else if (d.domain === 'strategy') renderStrategy(d, host);
+  else if (d.domain === 'circuit') renderCircuit(d, host);
   else renderNumber(d, host);
   wireChips(host);
 }
@@ -295,6 +311,107 @@ function drawSortnet(cv, n, comps) {
     g.beginPath(); g.moveTo(x, y1); g.lineTo(x, y2); g.stroke();
     g.beginPath(); g.arc(x, y1, 2.6, 0, 6.2832); g.fill();
     g.beginPath(); g.arc(x, y2, 2.6, 0, 6.2832); g.fill();
+  });
+}
+
+function renderMagic(d, host) {
+  const m = d.magic, n = m ? m.n : 0;
+  let grid = '';
+  if (m) {
+    grid = `<table class="msq">` + Array.from({ length: n }, (_, r) =>
+      `<tr>` + m.square.slice(r * n, r * n + n).map(v => `<td>${v}</td>`).join('') + `</tr>`).join('') + `</table>`;
+  }
+  host.innerHTML =
+    `<div class="dgrid"><div>${grid}
+       <div class="caption">every row, every column, and both diagonals sum to the same number.</div></div>
+     <div>
+       <h2>${d.symbol} <span style="color:#56565d;font-weight:400">#${d.id}</span></h2>
+       <div class="sub">mathematics &middot; a ${n} by ${n} magic square &middot; tick ${d.created_tick}</div>
+       <p class="lead">An arrangement of the numbers 1 to ${n * n} where every line adds up to ${m ? m.sum : '?'}.</p>
+       <div class="kv"><b>${m && m.valid ? 'verified: all ' + (2 * n + 2) + ' lines sum to ' + m.sum + '.' : 'not verified'}</b></div>
+       ${standingHTML(d)}
+     </div></div>`;
+}
+
+function renderAutomaton(d, host) {
+  const a = d.automaton;
+  host.innerHTML =
+    `<div class="dgrid"><div>
+       <canvas class="ca" width="81" height="81"></canvas>
+       <div class="caption">a rule invented for its own behaviour. time runs downward from a single seed.</div></div>
+     <div>
+       <h2>${d.symbol} <span style="color:#56565d;font-weight:400">#${d.id}</span></h2>
+       <div class="sub">science &middot; a cellular automaton &middot; tick ${d.created_tick}</div>
+       <p class="lead">A cellular automaton whose rule was invented directly. Its measured behaviour is <b>${a ? a.label : '?'}</b> (estimated class ${a ? a.class : '?'}), the kind of complexity that is interesting precisely because it is rare.</p>
+       <div class="fieldlab">the rule table</div>
+       <div class="seqline">${a ? a.table.join('  ') : ''}</div>
+       ${standingHTML(d)}
+     </div></div>`;
+  if (a && a.rows) drawCA(host.querySelector('.ca'), a.rows);
+}
+
+function renderStrategy(d, host) {
+  const s = d.strategy;
+  let tbl = '';
+  if (s) tbl = `<table class="policy"><tr>${s.policy.map((_, i) => `<td class="h">${i + 1}</td>`).join('')}</tr>` +
+    `<tr>${s.policy.map(v => `<td>${v}</td>`).join('')}</tr></table>`;
+  host.innerHTML =
+    `<div class="dgrid"><div>
+       <div class="caption" style="max-width:260px">the subtraction game: a pile of tokens, each player removes 1 to ${s ? s.k : '?'}, and whoever takes the last token wins.</div>
+       <div class="fieldlab">its policy (pile size on top, tokens to take below)</div>
+       ${tbl}
+     </div>
+     <div>
+       <h2>${d.symbol} <span style="color:#56565d;font-weight:400">#${d.id}</span></h2>
+       <div class="sub">game theory &middot; a strategy &middot; tick ${d.created_tick}</div>
+       <p class="lead">A strategy for the subtraction game. Played as the first player against a perfect opponent from every starting pile, it wins <b>${s ? s.wins : '?'}</b> of the <b>${s ? s.winnable : '?'}</b> positions the first player can possibly win.${s && s.optimal ? ' That is every one of them, so this is provably optimal play.' : ''}</p>
+       <div class="kv"><b>Verified by playing out every game, not by assertion.</b></div>
+       ${standingHTML(d)}
+     </div></div>`;
+}
+
+function renderCircuit(d, host) {
+  const c = d.circuit;
+  const names = { and: 'AND', or: 'OR', xor: 'XOR', nand: 'NAND', nor: 'NOR', not: 'NOT' };
+  let gl = '';
+  if (c) gl = c.gates.map((g, i) => {
+    const wire = k => k < c.n ? 'x' + k : 'g' + (k - c.n);
+    return `g${i} = ${g[0] === 'not' ? 'NOT ' + wire(g[1]) : wire(g[1]) + ' ' + (names[g[0]] || g[0]) + ' ' + wire(g[2])}`;
+  }).join('<br>');
+  host.innerHTML =
+    `<div class="dgrid"><div>
+       <canvas class="ca net" width="300" height="180"></canvas>
+       <div class="caption">inputs x0..x${c ? c.n - 1 : '?'} on the left feed gates; the last gate is the output.</div></div>
+     <div>
+       <h2>${d.symbol} <span style="color:#56565d;font-weight:400">#${d.id}</span></h2>
+       <div class="sub">logic &middot; a boolean circuit &middot; tick ${d.created_tick}</div>
+       <p class="lead">A logic circuit that computes <b>${c ? c.target : '?'}</b> of ${c ? c.n : '?'} inputs using <b>${c ? c.used : '?'}</b> essential gates${c && c.gates.length > c.used ? ` (it invented ${c.gates.length}; ${c.gates.length - c.used} turned out redundant)` : ''}.</p>
+       <div class="kv"><b>${c && c.valid ? 'verified: correct on all ' + c.inputs + ' possible inputs.' : 'not verified'}</b> Checked against the full truth table.</div>
+       <div class="fieldlab">the gates</div>
+       <div class="genome">${gl}</div>
+       ${standingHTML(d)}
+     </div></div>`;
+  if (c) drawCircuit(host.querySelector('.net'), c);
+}
+function drawCircuit(cv, c) {
+  const g = cv.getContext('2d'); g.fillStyle = '#000'; g.fillRect(0, 0, cv.width, cv.height);
+  const total = c.n + c.gates.length;
+  const padT = 14, padB = 14, padL = 24, padR = 10;
+  const gap = (cv.height - padT - padB) / Math.max(1, total - 1);
+  const Y = k => padT + k * gap;
+  g.fillStyle = '#8c8c93'; g.font = '9px monospace'; g.textBaseline = 'middle';
+  for (let i = 0; i < c.n; i++) { g.fillText('x' + i, 2, Y(i)); }
+  g.strokeStyle = '#2b2b2f';
+  for (let k = 0; k < total; k++) { g.beginPath(); g.moveTo(padL, Y(k)); g.lineTo(cv.width - padR, Y(k)); g.stroke(); }
+  g.strokeStyle = '#e9e9ec'; g.fillStyle = '#e9e9ec'; g.lineWidth = 1.3;
+  const steps = c.gates.length;
+  const dx = (cv.width - padL - padR) / (steps + 1);
+  c.gates.forEach((gate, i) => {
+    const out = c.n + i, x = padL + dx * (i + 1);
+    const ins = gate[0] === 'not' ? [gate[1]] : [gate[1], gate[2]];
+    ins.forEach(w => { g.beginPath(); g.moveTo(x, Y(w)); g.lineTo(x, Y(out)); g.stroke();
+      g.beginPath(); g.arc(x, Y(w), 2.2, 0, 6.2832); g.fill(); });
+    g.beginPath(); g.arc(x, Y(out), 2.6, 0, 6.2832); g.fill();
   });
 }
 
