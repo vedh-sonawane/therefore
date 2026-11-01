@@ -73,7 +73,7 @@
   .row .ty.converge,.row .ty.contact,.row .ty.era,.row .ty.revive,.row .ty.taste,
   .row .ty.figure,.row .ty.melody{color:var(--fg)}
   .row .ty.ouroboros{background:var(--hi);color:#000;padding:1px 7px;justify-self:start}
-  .row .ty.algorithm,.row .ty.magic,.row .ty.automaton,.row .ty.strategy,.row .ty.circuit{color:var(--fg)}
+  .row .ty.algorithm,.row .ty.magic,.row .ty.automaton,.row .ty.strategy,.row .ty.circuit,.row .ty.finding{color:var(--fg)}
   .row .ty.dormant{color:var(--ghost)}
   .row .ct{color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .row .ct .seq{color:var(--fg)}
@@ -178,7 +178,12 @@
         combines, how it judges what is interesting, how it mutates, is built from swappable parts. Over time it
         replaces those parts with functions it invented, so the engine is increasingly run by its own inventions.
         The figure at the top, <b>written by itself</b>, is the share of that machinery that is now self-authored,
-        and watching it climb is the point of the whole project.
+        and watching it climb is the point of the whole project.<br><br>
+        <b>It mines itself for discoveries.</b> With tens of thousands of verified inventions sitting in the library,
+        the engine hunts for exact relationships hidden between them: one sequence that turns out to be the running
+        total, the differences, or the squares of another, often invented independently in different worlds. Those,
+        together with results that match a known optimum and structured sequences absent from the OEIS, are collected
+        in the <b>Discoveries</b> tab, a vault that fills as it runs. Every finding is checked term by term.
       </div>
       <div class="stats" id="stats"></div>
     </div>
@@ -187,6 +192,7 @@
   <nav>
     <div class="wrap" style="display:flex;width:100%;max-width:1120px">
       <div class="tab on" data-view="ledger">live ledger</div>
+      <div class="tab" data-view="discoveries">discoveries</div>
       <div class="tab" data-view="firsts">firsts</div>
       <div class="tab" data-view="worlds">worlds</div>
       <div class="spacer"></div>
@@ -198,6 +204,10 @@
       <div class="view on" id="view-ledger">
         <div class="colhead"><span>tick</span><span>event</span><span>what it did</span></div>
         <div id="ledger"></div>
+      </div>
+      <div class="view" id="view-discoveries">
+        <div class="listhead">Verified findings the engine mined from its own inventions: exact relationships between sequences invented independently (often in different worlds), results that match a known optimum, and structured sequences absent from the OEIS. Ranked by how notable they are. Every one is checked.</div>
+        <div id="discoveries"></div>
       </div>
       <div class="view" id="view-firsts">
         <div class="listhead">Sequences this engine produced that were <b>not found in the OEIS</b>. Each was run, verified, and checked. Click to inspect.</div>

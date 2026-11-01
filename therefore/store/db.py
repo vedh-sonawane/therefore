@@ -122,6 +122,18 @@ CREATE TABLE IF NOT EXISTS oeis_cache (
     response TEXT,
     ts       REAL
 );
+
+CREATE TABLE IF NOT EXISTS discoveries (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    civ_id      INTEGER,
+    kind        TEXT,
+    statement   TEXT,
+    detail_json TEXT,
+    score       REAL,
+    key         TEXT,
+    created_tick INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_disc_key ON discoveries(key);
 """
 
 
@@ -258,6 +270,38 @@ class Store:
                     f"UPDATE inventions SET status='dormant' WHERE id IN ({qmarks})", dead)
             self.conn.commit()
             return dead
+
+    # -- discoveries ---------------------------------------------------------
+    def add_discovery(self, civ_id, kind, statement, detail, score, key, tick):
+        with self._lock:
+            exists = self.conn.execute(
+                "SELECT 1 FROM discoveries WHERE key=? LIMIT 1", (key,)).fetchone()
+            if exists:
+                return None
+            cur = self.conn.execute(
+                "INSERT INTO discoveries(civ_id,kind,statement,detail_json,score,key,"
+                "created_tick) VALUES(?,?,?,?,?,?,?)",
+                (civ_id, kind, statement, _j(detail), score, key, tick))
+            self.conn.commit()
+            return cur.lastrowid
+
+    def discovery_exists(self, key):
+        return self.conn.execute(
+            "SELECT 1 FROM discoveries WHERE key=? LIMIT 1", (key,)).fetchone() is not None
+
+    def get_discoveries(self, limit=200, kind=None):
+        if kind:
+            rows = self.conn.execute(
+                "SELECT * FROM discoveries WHERE kind=? ORDER BY score DESC, id DESC LIMIT ?",
+                (kind, limit)).fetchall()
+        else:
+            rows = self.conn.execute(
+                "SELECT * FROM discoveries ORDER BY score DESC, id DESC LIMIT ?",
+                (limit,)).fetchall()
+        return [dict(r) for r in rows]
+
+    def discovery_count(self):
+        return self.conn.execute("SELECT COUNT(*) n FROM discoveries").fetchone()["n"]
 
     def bulk_status(self, ids, status):
         if not ids:
@@ -416,6 +460,7 @@ class Store:
             "tick": tick,
             "civs": civs,
             "ouroboros": int(self.get_meta("ouroboros_pct", 0) or 0),
+            "discoveries": self.discovery_count(),
             "totals": {
                 "inventions": self.conn.execute(
                     "SELECT COUNT(*) n FROM inventions").fetchone()["n"],

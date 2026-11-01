@@ -244,6 +244,12 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/events":
                 after = int((qs.get("after", ["0"])[0]) or 0)
                 return self._send_json({"events": _events(st, after)})
+            if path == "/api/discoveries":
+                return self._send_json({"discoveries": [
+                    {"id": d["id"], "kind": d["kind"], "statement": d["statement"],
+                     "detail": json.loads(d["detail_json"] or "{}"), "score": d["score"],
+                     "tick": d["created_tick"]}
+                    for d in st.get_discoveries(200)]})
             if path == "/api/vault":
                 return self._send_json({"vault": [
                     {"inv_id": v["inv_id"], "symbol": v["symbol"], "civ_id": v["civ_id"],

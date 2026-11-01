@@ -20,6 +20,7 @@ async function refreshState() {
   $('#stats').innerHTML = [
     ['tick', state.snap.tick],
     ['inventions', t.inventions],
+    ['discoveries', state.snap.discoveries || 0],
     ['firsts', t.firsts],
     ['worlds', state.snap.civs.length],
     ['written by itself', (state.snap.ouroboros || 0) + '%'],
@@ -35,6 +36,7 @@ document.querySelectorAll('nav .tab').forEach(tab => tab.addEventListener('click
   state.view = v;
   if (v === 'firsts') loadFirsts();
   if (v === 'worlds') loadWorlds();
+  if (v === 'discoveries') loadDiscoveries();
 }));
 $('#whatlink').addEventListener('click', () => $('#explain').classList.toggle('open'));
 
@@ -56,6 +58,7 @@ const EVENTS = {
   strategy:      { tag: 'STRATEGY', cls: 'strategy' },
   circuit:       { tag: 'LOGIC',    cls: 'circuit' },
   ouroboros:     { tag: 'OUROBOROS', cls: 'ouroboros' },
+  finding:       { tag: 'FINDING',  cls: 'finding' },
   genesis:       { tag: 'WORLD',    cls: 'world' },
   birth:         { tag: 'INVENT',   cls: 'invent' },
 };
@@ -113,6 +116,8 @@ function lineFor(e) {
       return { inv: e.inv_id, text: `a logic circuit implementing invention ${p.source} with ${p.gates} gates`, note: `verified on all ${p.inputs} inputs` };
     case 'ouroboros':
       return { inv: e.inv_id, text: `the engine ${p.verb || 'adopts'} ${p.symbol} to run ${p.role}`, note: `${p.pct}% of its machinery is now self-written` };
+    case 'finding':
+      return { text: p.statement || 'a finding', note: 'a verified relationship between inventions' };
     case 'genesis':
       return { text: `${p.glyph || ''} ${p.name} begins`, note: 'a new world' };
     default: return null;
@@ -518,6 +523,24 @@ function plotSeq(c, seq) {
   g.stroke();
   g.fillStyle = '#e9e9ec';
   v.forEach((x, i) => { g.fillRect(X(i) - 1, Y(x) - 1, 2, 2); });
+}
+
+// ---------- discoveries ----------
+const DISC_TAG = { relation: 'RELATION', optimum: 'OPTIMUM', 'novel-sequence': 'NEW SEQUENCE' };
+async function loadDiscoveries() {
+  const host = $('#discoveries'); host.innerHTML = '<div class="empty">reading the vault...</div>';
+  let v; try { v = (await getJSON('/api/discoveries')).discoveries; } catch (x) { host.innerHTML = '<div class="empty">could not load</div>'; return; }
+  if (!v.length) { host.innerHTML = '<div class="empty">no findings yet; the engine mines these as its library grows</div>'; return; }
+  host.innerHTML = '';
+  v.forEach(d => {
+    const row = el('div', 'row');
+    row.style.gridTemplateColumns = '120px 1fr';
+    const invId = d.detail && (d.detail.inv || (d.detail.a && d.detail.a.id));
+    row.innerHTML = `<span class="ty ${d.kind === 'optimum' ? 'first' : d.kind === 'relation' ? 'finding' : 'magic'}">${DISC_TAG[d.kind] || d.kind}</span>` +
+      `<span class="ct"><span class="seq">${d.statement}</span></span>`;
+    if (invId) row.addEventListener('click', () => toggleDetail(row, invId));
+    host.appendChild(row);
+  });
 }
 
 // ---------- firsts ----------

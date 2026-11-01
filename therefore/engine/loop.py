@@ -17,8 +17,8 @@ import time
 
 from ..vm import type_check, run
 from ..novelty import check_sequence
-from . import (spark, combine, contact, discover as disc, domains, exapt, sortnet,
-               magic, automaton, strategy, circuit, taste as taste_mod, verify)
+from . import (spark, combine, contact, discover as disc, discovery, domains, exapt,
+               sortnet, magic, automaton, strategy, circuit, taste as taste_mod, verify)
 from .civilization import Civilization, create_civilization
 from .experiment import materialize, record, SEQ_LEN
 from .invention import Invention, behavior_hash
@@ -59,6 +59,9 @@ ORGAN_ROLE = {
     "mutator": "how it mutates inventions",
 }
 ADOPT_INTERVAL = 55      # ticks between adopting an invented function into an organ
+
+# the discovery engine: mine the library for verified relationships and findings
+DISCOVERY_INTERVAL = 9
 
 # Discovery domains. Sizes are NOT a fixed list: each world starts small and climbs on
 # its own as it masters a level. The only ceiling is compute (verification cost), not a
@@ -155,8 +158,32 @@ class Engine:
             self._era_transition()
         if self.tick % ADOPT_INTERVAL == 0:
             self._ouroboros_adopt()
+        if self.tick % DISCOVERY_INTERVAL == 0:
+            self._discovery_pass()
         self.store.set_meta("tick", self.tick)
         return self.tick
+
+    # -- the discovery engine: find verified relationships across the library -
+    def _discovery_pass(self):
+        items = []
+        for civ in self.civs:
+            for inv in civ.registry.values():
+                if (inv.domain == "number" and inv.total
+                        and len(inv.prefix) >= discovery.MINTERMS):
+                    items.append({"id": inv.id, "civ_id": civ.id, "symbol": inv.symbol,
+                                  "prefix": inv.prefix,
+                                  "related": set(inv.parts) | set(inv.parents)})
+        if len(items) < 20:
+            return
+        if len(items) > 3500:
+            items = items[-3500:]
+        for r in discovery.find_relationships(items, limit=4):
+            nid = self.store.add_discovery(None, "relation", r["statement"], r,
+                                           r["score"], r["key"], self.tick)
+            if nid:
+                self.store.add_event(self.tick, None, None, "finding",
+                                     {"kind": "relation", "statement": r["statement"],
+                                      "score": r["score"]})
 
     # -- the ouroboros --------------------------------------------------------
     def _organ_num(self, name, n, default):
@@ -445,6 +472,15 @@ class Engine:
             "symbol": inv.symbol, "n": n, "comparators": count,
             "best_known": best_known, "depth": sortnet.depth(net, n), "novelty": novelty,
         })
+        if best_known and count <= best_known:
+            beat = count < best_known
+            self.store.add_discovery(
+                civ.id, "optimum",
+                f"a sorting network for {n} wires with {count} comparators, " +
+                (f"beating the best previously known ({best_known})" if beat
+                 else "matching the proven optimum"),
+                {"n": n, "comparators": count, "best_known": best_known, "inv": inv.id},
+                12.0 if beat else 6.0, f"sortopt:{n}:{count}", self.tick)
 
     def _register_domain(self, civ, origin, domain, sig_out, body, prefix, score,
                          novelty, props, event_type, payload, parents=None, parts=None):
@@ -529,6 +565,12 @@ class Engine:
             props=[("plays", {"wins": w, "winnable": winnable, "remove_up_to": k})],
             event_type="strategy",
             payload={"wins": w, "winnable": winnable, "optimal": w >= winnable, "k": k})
+        if w >= winnable:
+            self.store.add_discovery(
+                civ.id, "optimum",
+                f"provably optimal play for the remove-1-to-{k} subtraction game, "
+                f"winning all {winnable} winnable positions",
+                {"k": k, "winnable": winnable}, 5.0, f"stratopt:{k}", self.tick)
 
     # -- discovery: logic (boolean circuits for self-generated targets) -------
     def _circuit_pass(self, civ, rng):
@@ -763,6 +805,16 @@ class Engine:
             self.store.add_event(self.tick, civ.id, inv_id, "first",
                                  {"symbol": symbol, "seq": novelty.get("seq", prefix)[:12],
                                   "receipt": novelty["receipt"]})
+            # a FIRST with real structure (not noise) is a candidate new sequence
+            strong = {"polynomial", "geometric", "prime-valued", "exponential-growth", "periodic"}
+            hit = [p for p in props if p[0] in strong]
+            if hit and distinct >= 6 and len(prefix) >= 10:
+                self.store.add_discovery(
+                    civ.id, "novel-sequence",
+                    f"a structured integer sequence not found in the OEIS "
+                    f"({', '.join(p[0] for p in hit)}): {', '.join(str(x) for x in prefix[:9])} ...",
+                    {"seq": prefix[:14], "properties": [p[0] for p in hit], "inv": inv_id},
+                    4.0 + len(hit), f"first:{inv_id}", self.tick)
         elif novelty["status"] == "known" and novelty["matches"]:
             self.store.add_event(self.tick, civ.id, inv_id, "known",
                                  {"symbol": symbol, "matches": novelty["matches"][:2]})
